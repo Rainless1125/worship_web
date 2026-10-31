@@ -656,11 +656,12 @@
 
 <script>
 // 使用者設定：特效開關與經文字體大小（存在瀏覽器裡，下次打開仍保留）
-window.worshipFx = { lightrays: true, galaxy: true, bokeh: true, meteors: true, horizon: true };
+// 預設：開啟天降光束、銀河星空、地平線微光；關閉光點粒子、流星
+window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false, horizon: true };
 (() => {
   const KEY = 'worship-settings';
   const fx = window.worshipFx;
-  let scale = 1;
+  let scale = 1.3;          // 預設經文字體大小 130%
   // 經文字體選項：[代號, 顯示名稱, CSS 字體名稱]
   const FONTS = [
     ['noto-serif', '思源宋體',   '"Noto Serif TC"'],
@@ -672,7 +673,7 @@ window.worshipFx = { lightrays: true, galaxy: true, bokeh: true, meteors: true, 
     ['goround',    '昭源甜圓',   '"Chiron GoRound TC"'],
     ['huninn',     '粉圓',       '"Huninn"']
   ];
-  let font = 'noto-serif';
+  let font = 'goround';     // 預設經文字體：昭源甜圓
   const MIN = 0.7, MAX = 1.8, STEP = 0.1;
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
