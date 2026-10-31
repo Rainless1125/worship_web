@@ -1921,35 +1921,59 @@ void main() {
     }
   }
 
-  function emitDust(x, y, scale, alpha) {
-    const kind = Math.random();
-    embers.push({
-      x, y,
-      vx: (Math.random() - 0.5) * 18,
-      vy: (Math.random() - 0.5) * 18 + 4,
-      size: (0.8 + Math.random() * 2.2) * scale,
-      age: 0,
-      life: 1.2 + Math.random() * 1.6,
-      sprite: kind < 0.4 ? SPRITES[2] : kind < 0.8 ? SPRITES[1] : STAR,
-      phase: Math.random() * 6.28,
-      gravity: 6, drag: 1.2, alpha: Math.max(0.4, alpha)
-    });
-  }
-
   // 遠處暗、靠近變亮
   const nearness = z => Math.min(1, Math.max(0, (95 - z) / 55));
 
-  // 流星頭：與銀河星空同款的星星，越近越大
-  function drawHead(m, p, alpha, time) {
+  // ===== 光暈綢帶：沒有硬邊的柔光帶，像一條發光的綢緞滑過天空 =====
+  // 依投影後的點畫出一條「每點寬度不同」的光帶
+  function ribbon(pts, widthAt, stops) {
+    const L = [], R = [];
+    for (let i = pts.length - 1; i >= 0; i--) {
+      const p = pts[i], q = pts[Math.max(i - 1, 0)], o = pts[Math.min(i + 1, pts.length - 1)];
+      let nx = -(o.y - q.y), ny = o.x - q.x;
+      const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+      const along = (pts.length - 1 - i) / (pts.length - 1 || 1);          // 0 = 流星頭、1 = 尾端
+      const hw = widthAt(p, along) / 2;
+      L.push([p.x + nx * hw, p.y + ny * hw]);
+      R.push([p.x - nx * hw, p.y - ny * hw]);
+    }
+    const head = pts[pts.length - 1], tip = pts[0];
+    const g = ctx.createLinearGradient(head.x, head.y, tip.x, tip.y);
+    stops.forEach(([o, c]) => g.addColorStop(o, c));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(L[0][0], L[0][1]);
+    for (let i = 1; i < L.length; i++) ctx.lineTo(L[i][0], L[i][1]);
+    for (let i = R.length - 1; i >= 0; i--) ctx.lineTo(R[i][0], R[i][1]);
+    ctx.closePath();
+    ctx.fill();
+  }
+  const canBlur = 'filter' in ctx;
+  function drawSilk(m, alpha) {
+    const P = m.trail.map(q => project(q));
+    if (P.length < 2) return;
+    // 柔光綢帶：中段最寬、兩端收細，用模糊做出沒有硬邊的光
+    const silkW = (q, s) => Math.min(46, 0.36 * q.k) * m.glow * Math.sin(Math.PI * Math.min(1, (1 - s) * 0.9 + 0.1));
+    const silkStops = a => [[0, `rgba(255,240,200,${0.55 * a})`], [0.4, `rgba(255,210,120,${0.3 * a})`], [1, 'rgba(255,190,90,0)']];
+    if (canBlur) {
+      ctx.save(); ctx.filter = 'blur(6px)';
+      ribbon(P, silkW, silkStops(alpha));
+      ctx.restore();
+    } else {
+      // 不支援模糊的瀏覽器（如部分 Safari）：疊幾層由寬到窄的淡光模擬柔邊
+      [[1.5, 0.35], [1.15, 0.45], [0.8, 0.6]].forEach(([k, a]) => ribbon(P, (q, s) => silkW(q, s) * k, silkStops(alpha * a)));
+    }
+    // 中央細細的亮芯
+    ribbon(P, (q, s) => Math.min(8, 0.05 * q.k) * m.glow * Math.pow(1 - s, 1.4),
+      [[0, `rgba(255,250,230,${0.7 * alpha})`], [1, 'rgba(255,230,170,0)']]);
+  }
+
+  // 流星頭：柔和的淡金光暈，越近越大
+  function drawHead(m, p, alpha) {
     const scale = Math.min(1.6, 0.012 * p.k) * m.glow;                  // 遠處只是一個小亮點
-    const r = 17 * scale;
-    ctx.globalAlpha = alpha * 0.8;
-    ctx.drawImage(SPRITES[1], p.x - r, p.y - r, r * 2, r * 2);
-    const tri = t => { const f = t - Math.floor(t); return 2 * (1 - (x => x * x * (3 - 2 * x))(Math.abs(2 * f - 1))) - 1; };
-    const twinkle = 1 + 0.3 * (tri(time * 1.6 + m.glow * 7) * 0.5);
-    const size = Math.max(6, 70 * scale * twinkle);
-    ctx.globalAlpha = Math.min(1, alpha * twinkle);
-    ctx.drawImage(STAR, p.x - size / 2, p.y - size / 2, size, size);
+    const size = Math.max(8, 50 * scale);
+    ctx.globalAlpha = Math.min(1, alpha * 0.7);
+    ctx.drawImage(SPRITES[1], p.x - size / 2, p.y - size / 2, size, size);
     ctx.globalAlpha = 1;
   }
 
@@ -1985,19 +2009,8 @@ void main() {
         if (m.gone || tailP.x < -margin || tailP.x > w + margin || tailP.y < -margin || tailP.y > h + margin) return false;
       }
       const alpha = envelope(m.age) * (0.35 + 0.65 * nearness(m.z));
-      // 星塵拖曳：沿著這一格的飛行路徑均勻灑下大量細小星塵（近處較多、較大）
-      const scale = Math.min(1.6, 0.012 * p.k);
-      const prev = m.trail.length > 1 ? project(m.trail[m.trail.length - 2]) : p;
-      m.sparkAcc += dt * 260 * Math.max(0.3, scale) * m.glow;
-      while (m.sparkAcc >= 1) {
-        m.sparkAcc -= 1;
-        if (off) continue;
-        const f = Math.random();
-        emitDust(prev.x + (p.x - prev.x) * f + (Math.random() - 0.5) * 6 * scale,
-                 prev.y + (p.y - prev.y) * f + (Math.random() - 0.5) * 6 * scale,
-                 Math.max(0.5, scale), alpha);
-      }
-      if (!off) drawHead(m, p, alpha, time);
+      drawSilk(m, alpha);
+      if (!off) drawHead(m, p, alpha);
       return true;
     });
 
