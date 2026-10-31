@@ -1921,66 +1921,33 @@ void main() {
     }
   }
 
-  function emitEmber(x, y, vx, vy, big, scale = 1) {
+  function emitDust(x, y, scale, alpha) {
+    const kind = Math.random();
     embers.push({
       x, y,
-      vx: vx + (Math.random() - 0.5) * 40 * scale,
-      vy: vy + (Math.random() - 0.5) * 40 * scale,
-      size: ((big ? 2.4 : 1.2) + Math.random() * (big ? 2.2 : 1.6)) * scale,
+      vx: (Math.random() - 0.5) * 18,
+      vy: (Math.random() - 0.5) * 18 + 4,
+      size: (0.8 + Math.random() * 2.2) * scale,
       age: 0,
-      life: 0.6 + Math.random() * 0.9,
-      sprite: SPRITES[(Math.random() * SPRITES.length) | 0],
-      phase: Math.random() * 6.28
+      life: 1.2 + Math.random() * 1.6,
+      sprite: kind < 0.4 ? SPRITES[2] : kind < 0.8 ? SPRITES[1] : STAR,
+      phase: Math.random() * 6.28,
+      gravity: 6, drag: 1.2, alpha: Math.max(0.4, alpha)
     });
   }
 
   // 遠處暗、靠近變亮
   const nearness = z => Math.min(1, Math.max(0, (95 - z) / 55));
 
-  // 光尾：投影過去 0.4 秒的位置，近處粗、遠處細，頭粗尾細
-  function drawTail(m, alpha) {
-    const pts = m.trail.map(p => ({ ...project(p), z: p.z }));
-    if (pts.length < 2) return;
-    const head = pts[pts.length - 1], tip = pts[0];
-    const layers = [
-      [7, [255, 196, 80], 0.16],
-      [2.8, [255, 232, 170], 0.42],
-      [0.9, [255, 255, 255], 0.95]
-    ];
-    for (const [mult, [r, g, b], a] of layers) {
-      const left = [], right = [];
-      for (let i = pts.length - 1; i >= 0; i--) {
-        const p = pts[i], q = pts[Math.max(i - 1, 0)], o = pts[Math.min(i + 1, pts.length - 1)];
-        let nx = -(o.y - q.y), ny = o.x - q.x;
-        const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
-        const along = (pts.length - 1 - i) / (pts.length - 1);           // 0 = 頭、1 = 尾
-        const hw = Math.min(14, 0.11 * p.k) * m.glow * mult * Math.pow(1 - along, 1.5) * 0.5;
-        left.push([p.x + nx * hw, p.y + ny * hw]);
-        right.push([p.x - nx * hw, p.y - ny * hw]);
-      }
-      const grad = ctx.createLinearGradient(head.x, head.y, tip.x, tip.y);
-      grad.addColorStop(0, `rgba(${r},${g},${b},${a * alpha})`);
-      grad.addColorStop(0.4, `rgba(${r},${g},${b},${a * alpha * 0.45})`);
-      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.moveTo(left[0][0], left[0][1]);
-      for (let i = 1; i < left.length; i++) ctx.lineTo(left[i][0], left[i][1]);
-      for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i][0], right[i][1]);
-      ctx.closePath();
-      ctx.fill();
-    }
-  }
-
   // 流星頭：與銀河星空同款的星星，越近越大
   function drawHead(m, p, alpha, time) {
     const scale = Math.min(1.6, 0.012 * p.k) * m.glow;                  // 遠處只是一個小亮點
-    const r = 16 * scale;
-    ctx.globalAlpha = alpha * 0.55;
-    ctx.drawImage(SPRITES[2], p.x - r * 1.4, p.y - r * 1.4, r * 2.8, r * 2.8);
+    const r = 17 * scale;
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.drawImage(SPRITES[1], p.x - r, p.y - r, r * 2, r * 2);
     const tri = t => { const f = t - Math.floor(t); return 2 * (1 - (x => x * x * (3 - 2 * x))(Math.abs(2 * f - 1))) - 1; };
     const twinkle = 1 + 0.3 * (tri(time * 1.6 + m.glow * 7) * 0.5);
-    const size = Math.max(6, 80 * scale * twinkle);
+    const size = Math.max(6, 70 * scale * twinkle);
     ctx.globalAlpha = Math.min(1, alpha * twinkle);
     ctx.drawImage(STAR, p.x - size / 2, p.y - size / 2, size, size);
     ctx.globalAlpha = 1;
@@ -2018,32 +1985,33 @@ void main() {
         if (m.gone || tailP.x < -margin || tailP.x > w + margin || tailP.y < -margin || tailP.y > h + margin) return false;
       }
       const alpha = envelope(m.age) * (0.35 + 0.65 * nearness(m.z));
-      // 沿途灑落餘燼（近處較多、較大）
+      // 星塵拖曳：沿著這一格的飛行路徑均勻灑下大量細小星塵（近處較多、較大）
       const scale = Math.min(1.6, 0.012 * p.k);
-      m.sparkAcc += dt * 70 * m.glow * scale;
+      const prev = m.trail.length > 1 ? project(m.trail[m.trail.length - 2]) : p;
+      m.sparkAcc += dt * 260 * Math.max(0.3, scale) * m.glow;
       while (m.sparkAcc >= 1) {
         m.sparkAcc -= 1;
-        if (!off) {
-          const prev = m.trail.length > 1 ? project(m.trail[m.trail.length - 2]) : p;
-          emitEmber(p.x, p.y, (p.x - prev.x) / dt * 0.06, (p.y - prev.y) / dt * 0.06 + 10, false, Math.max(0.4, scale));
-        }
+        if (off) continue;
+        const f = Math.random();
+        emitDust(prev.x + (p.x - prev.x) * f + (Math.random() - 0.5) * 6 * scale,
+                 prev.y + (p.y - prev.y) * f + (Math.random() - 0.5) * 6 * scale,
+                 Math.max(0.5, scale), alpha);
       }
-      drawTail(m, alpha);
       if (!off) drawHead(m, p, alpha, time);
       return true;
     });
 
-    // 餘燼：慢慢減速、微微下墜、閃爍著熄滅
+    // 星塵：慢慢減速、緩緩飄散、閃爍著熄滅
     embers = embers.filter(e => {
       e.age += dt;
       if (e.age >= e.life) return false;
-      const drag = Math.exp(-dt * 2.2);
-      e.vx *= drag; e.vy = e.vy * drag + 28 * dt;
+      const drag = Math.exp(-dt * (e.drag || 2.2));
+      e.vx *= drag; e.vy = e.vy * drag + (e.gravity != null ? e.gravity : 28) * dt;
       e.x += e.vx * dt; e.y += e.vy * dt;
       const k = 1 - e.age / e.life;
       const tw = 0.65 + 0.35 * Math.sin(time * 22 + e.phase);
       const s = e.size * (0.6 + 0.4 * k) * 4;
-      ctx.globalAlpha = k * k * tw;
+      ctx.globalAlpha = k * k * tw * (e.alpha || 1);
       ctx.drawImage(e.sprite, e.x - s / 2, e.y - s / 2, s, s);
       return true;
     });
