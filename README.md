@@ -15,6 +15,12 @@
 - 8 種經文字體可切換，設定會記在瀏覽器中
 - 音樂律動：按 Dock 上的聲波鍵分享電腦音訊（Windows Chrome／Edge 選整個螢幕並勾選「分享系統音訊」，或選播放音樂的分頁），可開關底部頻譜（流光波形／升起的光粒兩種樣式）與特效隨音樂律動
 
+### 檔案
+
+- `worship.html`：敬拜頁面本體
+- `index.html`：自動跳轉到 `worship.html`
+- `icons/`：網站圖示（`logo.svg` 為原始向量檔）
+
 ### 備註
 
 - 光束、粒子、星空使用 WebGL2，建議使用近幾年版本的 Chrome、Edge、Safari 或 Firefox

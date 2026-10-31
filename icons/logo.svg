@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <!-- 背景：深色圓角方塊，中心微微透出暖光 -->
+    <radialGradient id="bg" cx="50%" cy="36%" r="70%">
+      <stop offset="0" stop-color="#2a1d06"/>
+      <stop offset="0.55" stop-color="#0b0803"/>
+      <stop offset="1" stop-color="#000"/>
+    </radialGradient>
+    <!-- 十字架交叉點的光暈 -->
+    <radialGradient id="halo" cx="32" cy="23" r="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffe9a0" stop-opacity="0.85"/>
+      <stop offset="0.35" stop-color="#ffbf30" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#ffaa00" stop-opacity="0"/>
+    </radialGradient>
+    <!-- 十字架本體：以交叉點為中心，白熱→金黃 -->
+    <radialGradient id="body" cx="32" cy="23" r="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.25" stop-color="#fff3c4"/>
+      <stop offset="0.6" stop-color="#ffd050"/>
+      <stop offset="1" stop-color="#f0a818"/>
+    </radialGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="2.6"/>
+    </filter>
+    <path id="cross" d="M29 8h6v12h12v6H35v30h-6V26H17v-6h12z"/>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <circle cx="32" cy="23" r="24" fill="url(#halo)"/>
+  <use href="#cross" fill="#ffc23a" filter="url(#glow)" opacity="0.9"/>
+  <use href="#cross" fill="url(#body)" stroke="url(#body)" stroke-width="0.8" stroke-linejoin="round"/>
+</svg>
