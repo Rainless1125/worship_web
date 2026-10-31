@@ -526,6 +526,37 @@
   .mm-chevron svg { width: 10px; height: 10px; }
   .mm-row:hover .mm-chevron, .mm-row:focus-visible .mm-chevron, .mm-row[data-active] .mm-chevron { color: #fff; }
   .mm-font .mm-text { font-size: 15px; }
+  /* 選單裡的滑桿（音樂敏感度） */
+  .mm-slider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px 8px 28px;
+    font-size: 13px;
+    color: var(--menu-ink);
+  }
+  .mm-slider .val { flex: none; min-width: 2.6em; text-align: right; color: var(--menu-muted); font-variant-numeric: tabular-nums; }
+  .mm-slider input[type=range] {
+    flex: 1;
+    -webkit-appearance: none; appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #e0a82e var(--fill, 50%), rgba(255,255,255,0.18) var(--fill, 50%));
+    outline: none;
+    cursor: pointer;
+  }
+  .mm-slider input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  }
+  .mm-slider input[type=range]::-moz-range-thumb {
+    width: 16px; height: 16px; border: 0; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  }
+  .mm-slider input[type=range]:focus-visible { box-shadow: 0 0 0 2px rgba(255,215,90,0.7); }
+  .mm-slider-labels { display: flex; justify-content: space-between; padding: 0 46px 6px 28px; font-size: 10.5px; color: var(--menu-muted); }
+  @media (pointer: coarse) { .mm-slider { padding-top: 10px; padding-bottom: 12px; } }
   /* 觸控裝置：列高加大，比較好點 */
   @media (pointer: coarse) {
     .mm-row { height: 36px; font-size: 15px; }
@@ -678,7 +709,7 @@
 <script>
 // 使用者設定：特效開關與經文字體大小（存在瀏覽器裡，下次打開仍保留）
 // 預設：開啟天降光束、銀河星空、地平線微光；關閉光點粒子、流星
-window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false, horizon: true, eqBars: true, eqReact: true, eqStyle: 'wave' };
+window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false, horizon: true, eqBars: true, eqReact: true, eqStyle: 'wave', eqSens: 1 };
 (() => {
   const KEY = 'worship-settings';
   const fx = window.worshipFx;
@@ -799,9 +830,31 @@ window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false
     r.dataset.style = key;
     return r;
   });
+  // 音樂敏感度：越高，小聲的音樂也能讓光束與特效有明顯反應
+  // 滑桿位置 0～100 以等比方式對應 0.4～2.5 倍，正中間剛好是 1.0（中）
+  const SENS_K = 2.5;
+  const toSens = pos => Math.round(Math.pow(SENS_K, (pos - 50) / 50) * 10) / 10;
+  const toPos = v => Math.round(50 + 50 * Math.log(v) / Math.log(SENS_K));
+  const sensHead = el('div', 'mm-head', '<span>音樂敏感度</span>');
+  const sensRow = el('div', 'mm-slider');
+  sensRow.innerHTML = `<input type="range" min="0" max="100" step="1" aria-label="音樂敏感度"><span class="val"></span>`;
+  const sensLabels = el('div', 'mm-slider-labels', '<span>低</span><span>中</span><span>高</span>');
+  const sensInput = sensRow.querySelector('input'), sensVal = sensRow.querySelector('.val');
+  const showSens = () => {
+    const v = fx.eqSens;
+    if (document.activeElement !== sensInput) sensInput.value = toPos(v);
+    sensVal.textContent = v.toFixed(1) + '×';
+    sensInput.style.setProperty('--fill', sensInput.value + '%');
+    sensInput.setAttribute('aria-valuetext', v.toFixed(1) + ' 倍');
+  };
+  sensInput.addEventListener('input', () => { fx.eqSens = toSens(parseFloat(sensInput.value)); showSens(); });
+  sensInput.addEventListener('change', save);
+  // 選單用上下鍵切換列；在滑桿上時改成調整數值
+  sensInput.addEventListener('keydown', e => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.stopPropagation(); });
+  showSens();
   const eqSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
   mainList.append(sizeHead, fontRow, upRow, downRow, el('div', 'mm-sep'), fxHead, ...fxRows,
-    ...(eqSupported ? [el('div', 'mm-sep'), eqHead, ...eqRows, styleHead, ...styleRows] : []));
+    ...(eqSupported ? [el('div', 'mm-sep'), eqHead, ...eqRows, sensHead, sensRow, sensLabels, styleHead, ...styleRows] : []));
 
   // 字體子選單（每個名稱用該字體本身顯示）
   const backRow = row({ text: '返回', onClick: () => closeSub(true) });
@@ -1382,7 +1435,8 @@ void main() {
     const a = bin(f0), b = Math.max(a + 1, bin(f1));
     let sum = 0;
     for (let i = a; i < b; i++) sum += freq[i];
-    return sum / (b - a) / 255;
+    const sens = (window.worshipFx && window.worshipFx.eqSens) || 1;   // 音樂敏感度
+    return Math.min(1, sum / (b - a) / 255 * sens);
   }
   const follow = (cur, target, up, down) => cur + (target - cur) * (target > cur ? up : down);
 
