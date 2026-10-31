@@ -639,7 +639,7 @@
     </button>
     <span class="dock-separator" aria-hidden="true"></span>
     <button class="dock-item" id="nextVerseBtn" type="button" aria-label="下一則經文">
-      <span class="dock-tile"><span class="dock-face"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5l8 7-8 7z"/><path d="M18 5v14"/></svg></span></span>
+      <span class="dock-tile"><span class="dock-face"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.5h4.5a3 3 0 0 1 3 3v10.5a2.2 2.2 0 0 0-2.2-2.2H1.5z"/><path d="M16.5 5.5H12a3 3 0 0 0-3 3v10.5a2.2 2.2 0 0 1 2.2-2.2h5.3z"/><path d="M19.5 9l3 3-3 3"/></svg></span></span>
       <span class="dock-dot" aria-hidden="true"></span>
       <span class="dock-label" aria-hidden="true">下一則經文</span>
     </button>
@@ -650,7 +650,7 @@
     </button>
     <span class="dock-separator" aria-hidden="true"></span>
     <button class="dock-item" id="audioBtn" type="button" aria-label="偵測電腦播放的音樂" aria-pressed="false">
-      <span class="dock-tile"><span class="dock-face"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></span></span>
+      <span class="dock-tile"><span class="dock-face"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10v4"/><path d="M6 6v12"/><path d="M10 3v18"/><path d="M14 7.5v9"/><path d="M18 5v14"/><path d="M22 10v4"/></svg></span></span>
       <span class="dock-dot" aria-hidden="true"></span>
       <span class="dock-label" aria-hidden="true">偵測電腦播放的音樂</span>
     </button>
@@ -777,7 +777,7 @@ window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false
   });
   // 音樂律動（偵測電腦音樂時才有作用；不支援的裝置不顯示）
   const EQ_ITEMS = [['eqBars', '底部頻譜'], ['eqReact', '特效隨音樂律動']];
-  const eqHead = el('div', 'mm-head', '<span>音樂律動</span><span>需先開啟 ♪</span>');
+  const eqHead = el('div', 'mm-head', '<span>音樂律動</span><span>需先開啟聲波鍵</span>');
   const eqRows = EQ_ITEMS.map(([k, label]) => {
     const r = row({ text: label, role: 'menuitemcheckbox', checked: fx[k], onClick: b => { fx[k] = !fx[k]; setCheck(b, fx[k]); save(); } });
     r.dataset.fx = k;
