@@ -1908,6 +1908,7 @@ void main() {
       vy: dy * spread * (h / Math.max(w, h)),
       ay: 0.4 + Math.random() * 0.8,                                     // 微微下墜，軌跡帶弧度
       glow: 0.8 + Math.random() * 0.5,
+      seed: Math.random(),                                               // 閃爍的相位（每顆不同）
       age: 0, trail: [], gone: false
     });
   }
@@ -1960,11 +1961,24 @@ void main() {
   }
 
   // 流星頭：柔和的淡金光暈，越近越大
-  function drawHead(m, p, alpha) {
+  // 與銀河星空相同的閃爍曲線（trisn）：平滑地亮→暗→亮
+  const trisn = x => { const f = x - Math.floor(x); const t = Math.abs(2 * f - 1); return 2 * (1 - t * t * (3 - 2 * t)) - 1; };
+  function twinkleOf(m, time) {
+    // 銀河星空：twinkle = trisn(時間 + 種子) × 0.5 + 1；這裡加大幅度，讓流星的閃爍看得出來
+    return 1 + 0.55 * trisn(time * 1.4 + m.seed * 6.2831) * 0.5;
+  }
+
+  function drawHead(m, p, alpha, time) {
     const scale = Math.min(1.6, 0.012 * p.k) * m.glow;                  // 遠處只是一個小亮點
-    const size = Math.max(8, 50 * scale);
-    ctx.globalAlpha = Math.min(1, alpha * 0.7);
+    const tw = twinkleOf(m, time);
+    // 柔和光暈：大小與亮度跟著閃爍
+    const size = Math.max(8, 50 * scale * tw);
+    ctx.globalAlpha = Math.min(1, alpha * 0.7 * tw);
     ctx.drawImage(SPRITES[1], p.x - size / 2, p.y - size / 2, size, size);
+    // 與銀河星空同款的星星（十字星芒），一起閃爍
+    const star = Math.max(6, 58 * scale * tw);
+    ctx.globalAlpha = Math.min(1, alpha * (0.55 + 0.45 * tw));
+    ctx.drawImage(STAR, p.x - star / 2, p.y - star / 2, star, star);
     ctx.globalAlpha = 1;
   }
 
@@ -2000,8 +2014,8 @@ void main() {
         if (m.gone || tailP.x < -margin || tailP.x > w + margin || tailP.y < -margin || tailP.y > h + margin) return false;
       }
       const alpha = envelope(m.age) * (0.35 + 0.65 * nearness(m.z));
-      drawSilk(m, alpha);
-      if (!off) drawHead(m, p, alpha);
+      drawSilk(m, alpha * (0.85 + 0.15 * twinkleOf(m, time)));          // 光帶也微微跟著閃爍
+      if (!off) drawHead(m, p, alpha, time);
       return true;
     });
 
