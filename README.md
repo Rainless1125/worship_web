@@ -1,6 +1,6 @@
 ## 自製 worship 背景頁面網頁
 
-頁面特效與UI元素部分引用自 https://www.reactbits.dev/
+
 
 ### 使用方式
 
@@ -18,3 +18,5 @@
 
 - 光束、粒子、星空使用 WebGL2，建議使用近幾年版本的 Chrome、Edge、Safari 或 Firefox
 - 字體由 Google Fonts 載入，離線時會改用系統字體
+- 頁面特效與UI元素部分引用自 https://www.reactbits.dev/
+
