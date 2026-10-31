@@ -674,7 +674,7 @@
 <script>
 // 使用者設定：特效開關與經文字體大小（存在瀏覽器裡，下次打開仍保留）
 // 預設：開啟天降光束、銀河星空、地平線微光；關閉光點粒子、流星
-window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false, horizon: true, eqBars: true, eqReact: true };
+window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false, horizon: true, eqBars: true, eqReact: true, eqStyle: 'wave' };
 (() => {
   const KEY = 'worship-settings';
   const fx = window.worshipFx;
@@ -694,7 +694,7 @@ window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false
   const MIN = 0.7, MAX = 1.8, STEP = 0.1;
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
-    if (saved.fx) Object.keys(fx).forEach(k => { if (typeof saved.fx[k] === 'boolean') fx[k] = saved.fx[k]; });
+    if (saved.fx) Object.keys(fx).forEach(k => { if (typeof saved.fx[k] === typeof fx[k]) fx[k] = saved.fx[k]; });
     if (typeof saved.scale === 'number') scale = Math.min(MAX, Math.max(MIN, saved.scale));
     if (FONTS.some(f => f[0] === saved.font)) font = saved.font;
   } catch (e) {}
@@ -776,16 +776,28 @@ window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false
     return r;
   });
   // 音樂律動（偵測電腦音樂時才有作用；不支援的裝置不顯示）
-  const EQ_ITEMS = [['eqBars', '底部金色頻譜'], ['eqReact', '特效隨音樂律動']];
+  const EQ_ITEMS = [['eqBars', '底部頻譜'], ['eqReact', '特效隨音樂律動']];
   const eqHead = el('div', 'mm-head', '<span>音樂律動</span><span>需先開啟 ♪</span>');
   const eqRows = EQ_ITEMS.map(([k, label]) => {
     const r = row({ text: label, role: 'menuitemcheckbox', checked: fx[k], onClick: b => { fx[k] = !fx[k]; setCheck(b, fx[k]); save(); } });
     r.dataset.fx = k;
     return r;
   });
+  // 頻譜樣式（單選）：流光波形／升起的光粒
+  const STYLE_ITEMS = [['wave', '流光波形'], ['rise', '升起的光粒']];
+  const styleHead = el('div', 'mm-head', '<span>頻譜樣式</span>');
+  const styleRows = STYLE_ITEMS.map(([key, label]) => {
+    const r = row({ text: label, role: 'menuitemradio', checked: fx.eqStyle === key, onClick: () => {
+      fx.eqStyle = key; save();
+      styleRows.forEach(x => setCheck(x, x.dataset.style === key));
+      if (!fx.eqBars) { fx.eqBars = true; setCheck(eqRows[0], true); }   // 選了樣式就順便打開頻譜
+    } });
+    r.dataset.style = key;
+    return r;
+  });
   const eqSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
   mainList.append(sizeHead, fontRow, upRow, downRow, el('div', 'mm-sep'), fxHead, ...fxRows,
-    ...(eqSupported ? [el('div', 'mm-sep'), eqHead, ...eqRows] : []));
+    ...(eqSupported ? [el('div', 'mm-sep'), eqHead, ...eqRows, styleHead, ...styleRows] : []));
 
   // 字體子選單（每個名稱用該字體本身顯示）
   const backRow = row({ text: '返回', onClick: () => closeSub(true) });
@@ -1352,6 +1364,7 @@ void main() {
     if (analyser && analyser._src) { try { analyser._src.disconnect(); } catch (e) {} if (analyser._src.stop) try { analyser._src.stop(); } catch (e) {} }
     analyser = null;
     crossWrap.style.filter = '';
+    motes.length = 0;
     ctx.clearRect(0, 0, w, h);
     render();
     toast('已停止偵測音樂');
@@ -1369,43 +1382,100 @@ void main() {
   }
   const follow = (cur, target, up, down) => cur + (target - cur) * (target > cur ? up : down);
 
-  // ---- 等化器 1：底部金色頻譜（左右對稱） ----
-  const BARS = 48;
-  const barLevels = new Float32Array(BARS);
-  function drawBars() {
-    // 頻率以對數分布：40Hz～12kHz
-    for (let i = 0; i < BARS; i++) {
-      const f0 = 40 * Math.pow(300, i / BARS), f1 = 40 * Math.pow(300, (i + 1) / BARS);
-      const v = Math.pow(band(f0, f1), 1.4) * (0.75 + i / BARS * 0.6);   // 高頻稍微補強
-      barLevels[i] = follow(barLevels[i], v, 0.55, 0.12);
+  // ---- 底部頻譜：先算出 64 個頻段（對數分布 40Hz～12kHz）的平滑強度 ----
+  const BANDS = 64;
+  const levels = new Float32Array(BANDS);
+  function updateLevels() {
+    for (let i = 0; i < BANDS; i++) {
+      const f0 = 40 * Math.pow(300, i / BANDS), f1 = 40 * Math.pow(300, (i + 1) / BANDS);
+      const v = Math.pow(band(f0, f1), 1.4) * (0.75 + i / BANDS * 0.6);   // 高頻稍微補強
+      levels[i] = follow(levels[i], v, 0.5, 0.12);
     }
-    const total = BARS * 2;
-    const span = Math.min(w * 0.92, 980);
-    const gap = span / total;
-    const bw = Math.max(1.5, gap * 0.42);
-    const base = h - Math.max(18, h * 0.035);
-    const maxH = Math.min(h * 0.13, 110);   // 不要高到碰到經文
-    const grad = ctx.createLinearGradient(0, base - maxH, 0, base);
-    grad.addColorStop(0, 'rgba(255,248,215,0.95)');
-    grad.addColorStop(0.45, 'rgba(255,214,110,0.8)');
-    grad.addColorStop(1, 'rgba(224,150,40,0.15)');
-    for (let k = 0; k < total; k++) {
-      const i = k < BARS ? BARS - 1 - k : k - BARS;              // 中間低音、往兩側高音
-      const x = w / 2 - span / 2 + k * gap + (gap - bw) / 2;
-      const bh = Math.max(2, barLevels[i] * maxH);
-      ctx.fillStyle = grad;
-      ctx.globalAlpha = 0.9;
-      ctx.fillRect(x, base - bh, bw, bh);
-      // 柱頂亮點
-      ctx.globalAlpha = Math.min(1, barLevels[i] * 1.6);
-      ctx.fillStyle = 'rgba(255,255,240,1)';
-      ctx.fillRect(x, base - bh - 2, bw, 2);
-      // 地面倒影
-      ctx.globalAlpha = 0.18;
-      ctx.fillStyle = grad;
-      ctx.fillRect(x, base + 3, bw, bh * 0.25);
+  }
+  const baseY = () => h - Math.max(18, h * 0.035);
+  const maxH = () => Math.min(h * 0.13, 110);          // 不要高到碰到經文
+  const spanW = () => Math.min(w * 0.94, 1100);
+
+  // 樣式 C：流光波形——左右對稱的平滑發光曲線，下方填淡金色
+  function drawWave() {
+    const n = BANDS, base = baseY(), mh = maxH(), span = spanW(), left = w / 2 - span / 2;
+    const pts = [];
+    for (let k = 0; k < n * 2; k++) {
+      const i = k < n ? n - 1 - k : k - n;                        // 中間低音、往兩側高音
+      const env = Math.pow(Math.sin(Math.PI * (k + 0.5) / (n * 2)), 0.6);   // 兩端收細
+      pts.push([left + k * span / (n * 2 - 1), base - levels[i] * mh * env]);
+    }
+    const path = () => {
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length - 1; i++) {
+        const mx = (pts[i][0] + pts[i + 1][0]) / 2, my = (pts[i][1] + pts[i + 1][1]) / 2;
+        ctx.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
+      }
+      ctx.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+    };
+    path();
+    ctx.lineTo(left + span, base + 6); ctx.lineTo(left, base + 6); ctx.closePath();
+    const fill = ctx.createLinearGradient(0, base - mh, 0, base + 6);
+    fill.addColorStop(0, `rgba(255,210,100,${0.22 + A.level * 0.3})`);
+    fill.addColorStop(1, 'rgba(255,170,60,0)');
+    ctx.fillStyle = fill; ctx.fill();
+    // 外層光暈＋明亮的核心線
+    path();
+    ctx.shadowColor = 'rgba(255,200,80,0.9)'; ctx.shadowBlur = 16;
+    ctx.strokeStyle = 'rgba(255,215,120,0.55)'; ctx.lineWidth = 4; ctx.stroke();
+    ctx.shadowBlur = 0;
+    path();
+    ctx.strokeStyle = 'rgba(255,248,220,0.95)'; ctx.lineWidth = 1.6; ctx.stroke();
+  }
+
+  // 樣式 E：升起的光粒——每個頻段依強度往上噴出光粒，慢慢飄升、淡出
+  const motes = [];
+  const MOTE = (() => {
+    const s = 48, c = document.createElement('canvas'); c.width = c.height = s;
+    const x = c.getContext('2d'), g = x.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+    g.addColorStop(0, 'rgba(255,255,240,1)'); g.addColorStop(0.25, 'rgba(255,230,160,0.8)');
+    g.addColorStop(0.6, 'rgba(255,195,80,0.2)'); g.addColorStop(1, 'rgba(255,180,60,0)');
+    x.fillStyle = g; x.fillRect(0, 0, s, s); return c;
+  })();
+  const emitAcc = new Float32Array(BANDS * 2);
+  function drawRise(dt) {
+    const n = BANDS, base = baseY(), mh = maxH(), span = spanW(), left = w / 2 - span / 2, gap = span / (n * 2);
+    for (let k = 0; k < n * 2; k++) {
+      const i = k < n ? n - 1 - k : k - n;
+      const v = levels[i];
+      emitAcc[k] += dt * Math.pow(v, 1.6) * 26;                    // 越強噴越多
+      while (emitAcc[k] >= 1 && motes.length < 700) {
+        emitAcc[k] -= 1;
+        motes.push({
+          x: left + k * gap + gap / 2 + (Math.random() - 0.5) * gap,
+          y: base - Math.random() * 6,
+          vy: -(28 + Math.random() * 50) * (0.6 + v * 1.6),
+          sway: Math.random() * 6.28, swayAmp: 6 + Math.random() * 10,
+          size: 3 + Math.random() * 5 * (0.5 + v),
+          age: 0, life: 1.1 + Math.random() * 1.1, maxRise: mh * (0.6 + v * 1.4)
+        });
+      }
+      if (emitAcc[k] > 1) emitAcc[k] = 1;
+    }
+    for (let i = motes.length - 1; i >= 0; i--) {
+      const m = motes[i];
+      m.age += dt;
+      m.y += m.vy * dt;
+      m.vy *= Math.exp(-dt * 0.8);                                  // 越飛越慢
+      const risen = base - m.y;
+      if (m.age >= m.life || risen > m.maxRise * 1.3) { motes.splice(i, 1); continue; }
+      const t = m.age / m.life;
+      const a = Math.min(1, t / 0.12) * (1 - t) * (1 - Math.min(1, risen / (m.maxRise * 1.3)) * 0.6);
+      const x = m.x + Math.sin(m.sway + m.age * 2.2) * m.swayAmp * t;
+      ctx.globalAlpha = a;
+      ctx.drawImage(MOTE, x - m.size, m.y - m.size, m.size * 2, m.size * 2);
     }
     ctx.globalAlpha = 1;
+    // 底部一道淡淡的發光基線，跟著音量明暗
+    const g = ctx.createLinearGradient(left, 0, left + span, 0);
+    g.addColorStop(0, 'rgba(255,220,140,0)'); g.addColorStop(0.5, `rgba(255,225,150,${0.25 + A.level * 0.5})`); g.addColorStop(1, 'rgba(255,220,140,0)');
+    ctx.fillStyle = g; ctx.fillRect(left, base, span, 1.2);
   }
 
   let last = 0;
@@ -1427,7 +1497,8 @@ void main() {
       }
       const f = fx();
       ctx.globalCompositeOperation = 'lighter';
-      if (f.eqBars !== false) drawBars();
+      updateLevels();
+      if (f.eqBars !== false) { if (f.eqStyle === 'rise') drawRise(dt); else drawWave(); }
       ctx.globalCompositeOperation = 'source-over';
       // 十字架跟著低音亮一下
       const R = window.worshipAudioReact();
