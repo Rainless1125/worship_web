@@ -1877,7 +1877,7 @@ void main() {
     return c;
   })();
 
-  let meteors = [], embers = [], queue = [];
+  let meteors = [], embers = [];
   let nextMeteor = performance.now() + 2500 + Math.random() * 3000;
 
   const envelope = age => Math.min(1, age / 0.12);   // 快速點亮，之後一路亮著直到飛出畫面
@@ -1890,35 +1890,26 @@ void main() {
     return { x: c.x + p.x * k, y: c.y + p.y * k, k };
   };
 
-  function spawnMeteor(base) {
+  function spawnMeteor() {
     const f = focal(), c = vp();
-    const side = base ? base.side : (Math.random() < 0.5 ? -1 : 1);       // 往左或往右飛出
-    const z = base ? base.z * (0.9 + Math.random() * 0.25) : 70 + Math.random() * 30;   // 出發時很遠
-    // 起點：消失點附近（偏上方）的小亮點
-    const sx = base ? base.sx + (Math.random() - 0.5) * w * 0.08 : c.x + (Math.random() - 0.5) * w * 0.3;
-    const sy = base ? base.sy + (Math.random() - 0.5) * h * 0.04 : c.y - h * (0.02 + Math.random() * 0.12);
+    const z = 70 + Math.random() * 30;                                   // 出發時很遠
+    // 飛出方向：360 度任意方向（上、下、左、右、斜角都可能）
+    const dir = Math.random() * Math.PI * 2, dx = Math.cos(dir), dy = Math.sin(dir);
+    // 起點：消失點附近的小亮點，稍微往飛出方向的反側偏一點，飛行距離較完整
+    const sx = c.x - dx * w * 0.05 + (Math.random() - 0.5) * w * 0.12;
+    const sy = c.y - dy * h * 0.05 + (Math.random() - 0.5) * h * 0.1;
     const narrow = w < 700;
     const flight = (narrow ? 2.6 : 2.0) + Math.random() * 0.8;           // 從出現到飛出畫面大約的秒數
-    const m = {
+    const spread = (4 + Math.random() * 2) * z / 70 / flight * 4;        // 往外飛散的速度
+    meteors.push({
       x: (sx - c.x) * z / f, y: (sy - c.y) * z / f, z,
       vz: -(z * 0.82) / flight,                                          // 朝鏡頭靠近
-      vx: side * (3.6 + Math.random() * 2.2) * z / 70 / flight * 4,      // 往一側偏，最後從側邊飛出
-      vy: (-0.2 + Math.random() * 0.5) * z / 70 / flight * 4,
-      ay: (0.6 + Math.random() * 1.2) * (base ? base.bend : 1),          // 微微下墜，軌跡帶弧度
+      vx: dx * spread * (w / Math.max(w, h)),                            // 依畫面比例調整，橫長畫面上下方向不會太快
+      vy: dy * spread * (h / Math.max(w, h)),
+      ay: 0.4 + Math.random() * 0.8,                                     // 微微下墜，軌跡帶弧度
       glow: 0.8 + Math.random() * 0.5,
-      age: 0, trail: [], sparkAcc: 0, gone: false
-    };
-    meteors.push(m);
-    return { side, z, sx, sy, bend: m.ay };
-  }
-
-  // 偶爾（約 25%）來一小陣 2～4 顆的流星雨
-  function launch(now) {
-    const first = spawnMeteor();
-    if (Math.random() < 0.25) {
-      const extra = 1 + Math.floor(Math.random() * 3);
-      for (let i = 1; i <= extra; i++) queue.push({ at: now + i * (180 + Math.random() * 380), base: first });
-    }
+      age: 0, trail: [], gone: false
+    });
   }
 
   // 遠處暗、靠近變亮
@@ -1983,11 +1974,11 @@ void main() {
     last = now; time += dt;
     ctx.clearRect(0, 0, w, h);
     if (!window.worshipFx.meteors) {
-      meteors = []; embers = []; queue = []; nextMeteor = now + 3000;
+      meteors = []; embers = []; nextMeteor = now + 3000;
       requestAnimationFrame(draw); return;
     }
-    if (!reduceMotion && now > nextMeteor) { launch(now); nextMeteor = now + 6000 + Math.random() * 10000; }
-    queue = queue.filter(q => { if (now >= q.at) { spawnMeteor(q.base); return false; } return true; });
+    // 一次最多一顆：畫面上還有流星時先不出新的
+    if (!reduceMotion && now > nextMeteor && meteors.length === 0) { spawnMeteor(); nextMeteor = now + 6000 + Math.random() * 10000; }
 
     ctx.globalCompositeOperation = 'lighter';   // 光線疊加會自然變亮
 
@@ -2034,7 +2025,7 @@ void main() {
   }
 
   // 方便測試：在主控台輸入 worshipMeteorTest() 立刻來一顆
-  window.worshipMeteorTest = () => launch(performance.now());
+  window.worshipMeteorTest = () => { if (meteors.length === 0) spawnMeteor(); };
   window.addEventListener('resize', resize);
   resize();
   requestAnimationFrame(draw);
