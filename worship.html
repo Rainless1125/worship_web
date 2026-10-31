@@ -1600,7 +1600,9 @@ void main() {
   function spawnMeteor(base) {
     const fromLeft = base ? base.fromLeft : Math.random() < 0.5;
     const scale = 0.75 + Math.random() * 0.6;                       // 粗細與亮度
-    const len = (180 + Math.random() * 160) * scale;
+    // 依螢幕寬度縮放：手機上光尾短一點，才不會一條光尾就橫跨整個畫面
+    const screenK = Math.min(1, Math.max(0.5, w / 1100));
+    const len = (180 + Math.random() * 160) * scale * screenK;
     const margin = 40;
     const sx = fromLeft ? -margin : w + margin;                     // 從左側或右側畫面外出發
     const ex = fromLeft ? w + margin : -margin;                     // 從另一側畫面外離開
@@ -1616,7 +1618,7 @@ void main() {
     const m = {
       p0: { x: sx, y: y0 }, p1: { x: cx, y: cy }, p2: { x: ex, y: y1 },
       t: 0,
-      speed: 620 + Math.random() * 420,                             // 每秒移動的像素
+      speed: 0,                                                     // 下方依「橫越時間」換算
       len,
       width: 2.2 * scale,
       glow: scale,
@@ -1628,6 +1630,11 @@ void main() {
     let L = 0, prev = bez(m, 0);
     for (let i = 1; i <= 24; i++) { const q = bez(m, i / 24); L += Math.hypot(q.x - prev.x, q.y - prev.y); prev = q; }
     m.length = L;
+    // 以「橫越畫面所需時間」決定速度，手機與電腦看起來一樣從容
+    // 電腦約 1.4～2.2 秒；窄螢幕（手機）約 2.2～3.2 秒，因為小螢幕上同樣的移動看起來更快
+    const narrow = w < 700;
+    const duration = (narrow ? 2.2 : 1.4) + Math.random() * (narrow ? 1.0 : 0.8);
+    m.speed = L / duration;
     Object.assign(m, bez(m, 0));
     const tg = bezTangent(m, 0), tl = Math.hypot(tg.x, tg.y) || 1;
     m.vx = tg.x / tl * m.speed; m.vy = tg.y / tl * m.speed;
