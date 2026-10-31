@@ -60,6 +60,15 @@
     width: 100%; height: 100%;
   }
   /* 灑落亮點畫布 */
+  /* 音樂等化器畫布 */
+  #eq {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+    pointer-events: none;
+  }
+  #audioBtn[aria-pressed="true"] .dock-dot { opacity: 1; }
+  #audioBtn[aria-pressed="true"] .dock-face { color: #ffd36a; }
   #sparkles {
     position: fixed; inset: 0;
     width: 100%; height: 100%;
@@ -543,6 +552,7 @@
   <div class="light-rays" id="lightRays" aria-hidden="true"><canvas></canvas></div>
   <div class="particles" id="particles" aria-hidden="true"><canvas></canvas></div>
   <canvas id="sparkles"></canvas>
+  <canvas id="eq"></canvas>
 
   <div class="cross-wrap" aria-label="發光的十字架">
     <div class="halo"></div>
@@ -629,16 +639,21 @@
     </button>
     <span class="dock-separator" aria-hidden="true"></span>
     <button class="dock-item" id="nextVerseBtn" type="button" aria-label="下一則經文">
-      <span class="dock-tile"><span class="dock-face"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5l8 7-8 7z"/><path d="M18 5v14"/></svg></span></span>
+      <span class="dock-tile"><span class="dock-face"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.5h4.5a3 3 0 0 1 3 3v10.5a2.2 2.2 0 0 0-2.2-2.2H1.5z"/><path d="M16.5 5.5H12a3 3 0 0 0-3 3v10.5a2.2 2.2 0 0 1 2.2-2.2h5.3z"/><path d="M19.5 9l3 3-3 3"/></svg></span></span>
       <span class="dock-dot" aria-hidden="true"></span>
       <span class="dock-label" aria-hidden="true">下一則經文</span>
     </button>
     <button class="dock-item" id="shuffleBtn" type="button" aria-label="隨機播放經文" aria-pressed="false">
-      <span class="dock-tile"><span class="dock-face"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h4v4"/><path d="M4 18c5 0 7-2 9-6s4-6 7-8"/><path d="M16 20h4v-4"/><path d="M4 6c3 0 5 .8 6.5 2.5"/><path d="M14 15.5c1.5 1.7 3.5 2.5 6 4.5"/></svg></span></span>
+      <span class="dock-tile"><span class="dock-face"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="11" height="14.5" rx="2" transform="rotate(-14 8 13.25)"/><rect x="10" y="3" width="11" height="14.5" rx="2" transform="rotate(10 15.5 10.25)" fill="currentColor" fill-opacity="0.12"/><path d="M13.6 8.2l4.6.8M13.2 11l4.6.8M12.8 13.8l2.8.5" transform="rotate(0)"/></svg></span></span>
       <span class="dock-dot" aria-hidden="true"></span>
       <span class="dock-label" aria-hidden="true">隨機播放經文</span>
     </button>
     <span class="dock-separator" aria-hidden="true"></span>
+    <button class="dock-item" id="audioBtn" type="button" aria-label="偵測電腦播放的音樂" aria-pressed="false">
+      <span class="dock-tile"><span class="dock-face"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10v4"/><path d="M6 6v12"/><path d="M10 3v18"/><path d="M14 7.5v9"/><path d="M18 5v14"/><path d="M22 10v4"/></svg></span></span>
+      <span class="dock-dot" aria-hidden="true"></span>
+      <span class="dock-label" aria-hidden="true">偵測電腦播放的音樂</span>
+    </button>
     <button class="dock-item" id="fxBtn" type="button" aria-label="畫面特效設定" aria-expanded="false" aria-controls="fxPanel">
       <span class="dock-tile"><span class="dock-face"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></span></span>
       <span class="dock-dot" aria-hidden="true"></span>
@@ -659,7 +674,7 @@
 <script>
 // 使用者設定：特效開關與經文字體大小（存在瀏覽器裡，下次打開仍保留）
 // 預設：開啟天降光束、銀河星空、地平線微光；關閉光點粒子、流星
-window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false, horizon: true };
+window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false, horizon: true, eqBars: true, eqReact: true, eqStyle: 'wave' };
 (() => {
   const KEY = 'worship-settings';
   const fx = window.worshipFx;
@@ -679,7 +694,7 @@ window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false
   const MIN = 0.7, MAX = 1.8, STEP = 0.1;
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
-    if (saved.fx) Object.keys(fx).forEach(k => { if (typeof saved.fx[k] === 'boolean') fx[k] = saved.fx[k]; });
+    if (saved.fx) Object.keys(fx).forEach(k => { if (typeof saved.fx[k] === typeof fx[k]) fx[k] = saved.fx[k]; });
     if (typeof saved.scale === 'number') scale = Math.min(MAX, Math.max(MIN, saved.scale));
     if (FONTS.some(f => f[0] === saved.font)) font = saved.font;
   } catch (e) {}
@@ -760,7 +775,29 @@ window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false
     r.dataset.fx = k;
     return r;
   });
-  mainList.append(sizeHead, fontRow, upRow, downRow, el('div', 'mm-sep'), fxHead, ...fxRows);
+  // 音樂律動（偵測電腦音樂時才有作用；不支援的裝置不顯示）
+  const EQ_ITEMS = [['eqBars', '底部頻譜'], ['eqReact', '特效隨音樂律動']];
+  const eqHead = el('div', 'mm-head', '<span>音樂律動</span><span>需先開啟聲波鍵</span>');
+  const eqRows = EQ_ITEMS.map(([k, label]) => {
+    const r = row({ text: label, role: 'menuitemcheckbox', checked: fx[k], onClick: b => { fx[k] = !fx[k]; setCheck(b, fx[k]); save(); } });
+    r.dataset.fx = k;
+    return r;
+  });
+  // 頻譜樣式（單選）：流光波形／升起的光粒
+  const STYLE_ITEMS = [['wave', '流光波形'], ['rise', '升起的光粒']];
+  const styleHead = el('div', 'mm-head', '<span>頻譜樣式</span>');
+  const styleRows = STYLE_ITEMS.map(([key, label]) => {
+    const r = row({ text: label, role: 'menuitemradio', checked: fx.eqStyle === key, onClick: () => {
+      fx.eqStyle = key; save();
+      styleRows.forEach(x => setCheck(x, x.dataset.style === key));
+      if (!fx.eqBars) { fx.eqBars = true; setCheck(eqRows[0], true); }   // 選了樣式就順便打開頻譜
+    } });
+    r.dataset.style = key;
+    return r;
+  });
+  const eqSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+  mainList.append(sizeHead, fontRow, upRow, downRow, el('div', 'mm-sep'), fxHead, ...fxRows,
+    ...(eqSupported ? [el('div', 'mm-sep'), eqHead, ...eqRows, styleHead, ...styleRows] : []));
 
   // 字體子選單（每個名稱用該字體本身顯示）
   const backRow = row({ text: '返回', onClick: () => closeSub(true) });
@@ -1175,7 +1212,8 @@ void main() {
     gl.uniform1f(u.uRandomness, S.randomness);
     gl.uniform1f(u.uBlur, S.depthOfField * 14);
     gl.uniform1f(u.uFocus, S.camera + 14);
-    gl.uniform1f(u.uGlow, S.glow);
+    const AG = window.worshipAudioReact && window.worshipAudioReact();
+    gl.uniform1f(u.uGlow, S.glow * (AG ? 1 + AG.mid * 1.2 : 1));
     gl.uniform1f(u.uTwinkle, S.twinkle);
     gl.uniform1i(u.uShape, S.shape);
     gl.uniform1i(u.uDrift, S.drift);
@@ -1197,7 +1235,8 @@ void main() {
     const dt = last ? clamp((now - last) / 1000, 0.0005, 0.05) : 1 / 60;
     last = now;
     const motion = reduce ? 0 : 1;
-    const pace = dt * S.speed * motion;
+    const AR = window.worshipAudioReact && window.worshipAudioReact();
+    const pace = dt * S.speed * motion * (AR ? 1 + AR.level * 2.5 : 1);
     state.clock += pace;
     if (S.rotate) state.spin += pace * 0.6;
     state.travel += dt * S.driftSpeed * motion * (S.drift === 3 ? 6 : 0.9);
@@ -1235,6 +1274,266 @@ void main() {
   document.addEventListener('visibilitychange', () => { last = 0; wake(); });
   window.addEventListener('resize', resize);
   resize();
+})();
+</script>
+
+<script>
+// ===== 音樂律動：擷取電腦播放的聲音（分享系統音訊／分頁音訊），分析頻譜後驅動等化器 =====
+(() => {
+  const btn = document.getElementById('audioBtn');
+  const canvas = document.getElementById('eq');
+  const ctx = canvas.getContext('2d');
+  const crossWrap = document.querySelector('.cross-wrap');
+  const toast = msg => window.worshipToast && window.worshipToast(msg);
+  const fx = () => window.worshipFx || {};
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const supported = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+  if (!supported) btn.hidden = true;     // 手機等不支援分享音訊的裝置，不顯示按鈕
+
+  let audioCtx = null, analyser = null, stream = null, freq = null, sampleRate = 48000;
+  let active = false;
+  let w = 0, h = 0, dpr = 1;
+  // 平滑後的各頻段強度（0～1），以及節拍偵測
+  const A = { bass: 0, mid: 0, treble: 0, level: 0, beatId: 0, beatStrength: 0 };
+  let bassAvg = 0, lastBeat = 0;
+
+  // 提供給其他特效讀取：只有在偵測中、且「特效隨音樂律動」開啟時才回傳
+  window.worshipAudioReact = () => (active && fx().eqReact !== false ? A : null);
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = window.innerWidth; h = window.innerHeight;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function render() {
+    btn.setAttribute('aria-pressed', String(active));
+    const label = active ? '停止偵測音樂' : '偵測電腦播放的音樂';
+    btn.setAttribute('aria-label', label);
+    btn.querySelector('.dock-label').textContent = label;
+    document.body.classList.toggle('audio-on', active);
+  }
+
+  async function start() {
+    try {
+      // Chrome／Edge 規定一定要同時要求畫面，取得後立刻停掉畫面，只留聲音
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        systemAudio: 'include',
+        selfBrowserSurface: 'exclude'
+      });
+    } catch (e) {
+      if (e && e.name === 'NotAllowedError') toast('已取消分享');
+      else toast('此瀏覽器或環境不支援分享音訊');
+      return;
+    }
+    stream.getVideoTracks().forEach(t => t.stop());
+    const tracks = stream.getAudioTracks();
+    if (!tracks.length) {
+      toast('沒有收到聲音：請勾選「分享系統音訊」或「分享分頁音訊」');
+      stream = null;
+      return;
+    }
+    connect(new MediaStream(tracks));
+    tracks[0].addEventListener('ended', stop);   // 使用者按瀏覽器的「停止分享」時
+    toast('🎵 已開始偵測音樂');
+  }
+
+  function connect(mediaStream, node) {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx.resume();
+    sampleRate = audioCtx.sampleRate;
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.72;
+    freq = new Uint8Array(analyser.frequencyBinCount);
+    const src = node || audioCtx.createMediaStreamSource(mediaStream);
+    src.connect(analyser);      // 只分析、不接到喇叭，不會重複播放或回音
+    analyser._src = src;
+    active = true;
+    render();
+  }
+
+  function stop() {
+    if (!active) return;
+    active = false;
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null;
+    if (analyser && analyser._src) { try { analyser._src.disconnect(); } catch (e) {} if (analyser._src.stop) try { analyser._src.stop(); } catch (e) {} }
+    analyser = null;
+    crossWrap.style.filter = '';
+    motes.length = 0;
+    ctx.clearRect(0, 0, w, h);
+    render();
+    toast('已停止偵測音樂');
+  }
+
+  btn.addEventListener('click', () => (active ? stop() : start()));
+
+  // 頻率（Hz）→ 頻譜陣列位置；取一段頻率的平均強度
+  const bin = f => Math.min(freq.length - 1, Math.max(0, Math.round(f / (sampleRate / 2) * freq.length)));
+  function band(f0, f1) {
+    const a = bin(f0), b = Math.max(a + 1, bin(f1));
+    let sum = 0;
+    for (let i = a; i < b; i++) sum += freq[i];
+    return sum / (b - a) / 255;
+  }
+  const follow = (cur, target, up, down) => cur + (target - cur) * (target > cur ? up : down);
+
+  // ---- 底部頻譜：先算出 64 個頻段（對數分布 40Hz～12kHz）的平滑強度 ----
+  const BANDS = 64;
+  const levels = new Float32Array(BANDS);
+  function updateLevels() {
+    for (let i = 0; i < BANDS; i++) {
+      const f0 = 40 * Math.pow(300, i / BANDS), f1 = 40 * Math.pow(300, (i + 1) / BANDS);
+      const v = Math.pow(band(f0, f1), 1.4) * (0.75 + i / BANDS * 0.6);   // 高頻稍微補強
+      levels[i] = follow(levels[i], v, 0.5, 0.12);
+    }
+  }
+  const baseY = () => h - Math.max(18, h * 0.035);
+  const maxH = () => Math.min(h * 0.13, 110);          // 不要高到碰到經文
+  const spanW = () => Math.min(w * 0.94, 1100);
+
+  // 樣式 C：流光波形——左右對稱的平滑發光曲線，下方填淡金色
+  function drawWave() {
+    const base = baseY(), verseBottom = document.getElementById('verse').getBoundingClientRect().bottom;
+    const n = BANDS, mh = Math.min(maxH(), Math.max(24, base - verseBottom - 10)), span = spanW(), left = w / 2 - span / 2;   // 波形不會碰到經文
+    const pts = [];
+    for (let k = 0; k < n * 2; k++) {
+      const i = k < n ? n - 1 - k : k - n;                        // 中間低音、往兩側高音
+      const env = Math.pow(Math.sin(Math.PI * (k + 0.5) / (n * 2)), 0.6);   // 兩端收細
+      pts.push([left + k * span / (n * 2 - 1), base - levels[i] * mh * env]);
+    }
+    const path = () => {
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length - 1; i++) {
+        const mx = (pts[i][0] + pts[i + 1][0]) / 2, my = (pts[i][1] + pts[i + 1][1]) / 2;
+        ctx.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
+      }
+      ctx.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+    };
+    path();
+    ctx.lineTo(left + span, base + 6); ctx.lineTo(left, base + 6); ctx.closePath();
+    const fill = ctx.createLinearGradient(0, base - mh, 0, base + 6);
+    fill.addColorStop(0, `rgba(255,210,100,${0.22 + A.level * 0.3})`);
+    fill.addColorStop(1, 'rgba(255,170,60,0)');
+    ctx.fillStyle = fill; ctx.fill();
+    // 外層光暈＋明亮的核心線
+    path();
+    ctx.shadowColor = 'rgba(255,200,80,0.9)'; ctx.shadowBlur = 16;
+    ctx.strokeStyle = 'rgba(255,215,120,0.55)'; ctx.lineWidth = 4; ctx.stroke();
+    ctx.shadowBlur = 0;
+    path();
+    ctx.strokeStyle = 'rgba(255,248,220,0.95)'; ctx.lineWidth = 1.6; ctx.stroke();
+  }
+
+  // 樣式 E：升起的光粒——每個頻段依強度往上噴出光粒，慢慢飄升、淡出
+  const motes = [];
+  const MOTE = (() => {
+    const s = 48, c = document.createElement('canvas'); c.width = c.height = s;
+    const x = c.getContext('2d'), g = x.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+    g.addColorStop(0, 'rgba(255,255,240,1)'); g.addColorStop(0.25, 'rgba(255,230,160,0.8)');
+    g.addColorStop(0.6, 'rgba(255,195,80,0.2)'); g.addColorStop(1, 'rgba(255,180,60,0)');
+    x.fillStyle = g; x.fillRect(0, 0, s, s); return c;
+  })();
+  const emitAcc = new Float32Array(BANDS * 2);
+  function drawRise(dt) {
+    const n = BANDS, base = baseY(), mh = maxH(), span = spanW(), left = w / 2 - span / 2, gap = span / (n * 2);
+    // 光粒最高只飄到經文下緣，不會蓋到經文與出處
+    const verseBottom = document.getElementById('verse').getBoundingClientRect().bottom;
+    const room = Math.max(24, base - verseBottom - 8);
+    // 從中間往兩側、左右成對輪流產生，數量上限時兩邊也會平均分配，不會偏一邊
+    for (let j = 0; j < n; j++) {
+      const v = levels[j];                                         // j = 0 是最低音（最靠中間）
+      for (const k of [n - 1 - j, n + j]) {                        // 左側與右側對稱位置
+        emitAcc[k] += dt * Math.pow(v, 1.6) * 16;                  // 越強噴越多
+        while (emitAcc[k] >= 1 && motes.length < 900) {
+          emitAcc[k] -= 1;
+          motes.push({
+            x: left + k * gap + gap / 2 + (Math.random() - 0.5) * gap,
+            y: base - Math.random() * 6,
+            vy: -(28 + Math.random() * 50) * (0.6 + v * 1.6),
+            sway: Math.random() * 6.28, swayAmp: 6 + Math.random() * 10,
+            size: 3 + Math.random() * 5 * (0.5 + v),
+            age: 0, life: 1.1 + Math.random() * 1.1, maxRise: Math.min(mh * (0.45 + v * 0.8), room / 1.3)
+          });
+        }
+        if (emitAcc[k] > 1) emitAcc[k] = 1;
+      }
+    }
+    for (let i = motes.length - 1; i >= 0; i--) {
+      const m = motes[i];
+      m.age += dt;
+      m.y += m.vy * dt;
+      m.vy *= Math.exp(-dt * 0.8);                                  // 越飛越慢
+      const risen = base - m.y;
+      if (m.age >= m.life || risen > m.maxRise * 1.3) { motes.splice(i, 1); continue; }
+      const t = m.age / m.life;
+      const a = Math.min(1, t / 0.12) * (1 - t) * (1 - Math.min(1, risen / (m.maxRise * 1.3)) * 0.6);
+      const x = m.x + Math.sin(m.sway + m.age * 2.2) * m.swayAmp * t;
+      ctx.globalAlpha = a;
+      ctx.drawImage(MOTE, x - m.size, m.y - m.size, m.size * 2, m.size * 2);
+    }
+    ctx.globalAlpha = 1;
+    // 底部一道淡淡的發光基線，跟著音量明暗
+    const g = ctx.createLinearGradient(left, 0, left + span, 0);
+    g.addColorStop(0, 'rgba(255,220,140,0)'); g.addColorStop(0.5, `rgba(255,225,150,${0.25 + A.level * 0.5})`); g.addColorStop(1, 'rgba(255,220,140,0)');
+    ctx.fillStyle = g; ctx.fillRect(left, base, span, 1.2);
+  }
+
+  let last = 0;
+  function frame(now) {
+    const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
+    last = now;
+    ctx.clearRect(0, 0, w, h);
+    if (active && analyser) {
+      analyser.getByteFrequencyData(freq);
+      const bass = band(30, 160), mid = band(160, 2000), treble = band(2000, 9000);
+      A.bass = follow(A.bass, bass, 0.6, 0.15);
+      A.mid = follow(A.mid, mid, 0.5, 0.12);
+      A.treble = follow(A.treble, treble, 0.5, 0.12);
+      A.level = follow(A.level, (bass * 0.5 + mid * 0.35 + treble * 0.15), 0.4, 0.08);
+      // 節拍：低音突然高於近期平均
+      bassAvg = bassAvg * 0.96 + bass * 0.04;
+      if (bass > bassAvg * 1.25 + 0.06 && bass > 0.3 && now - lastBeat > 280) {
+        lastBeat = now; A.beatId++; A.beatStrength = Math.min(1, (bass - bassAvg) * 3);
+      }
+      const f = fx();
+      ctx.globalCompositeOperation = 'lighter';
+      updateLevels();
+      if (f.eqBars !== false) { if (f.eqStyle === 'rise') drawRise(dt); else drawWave(); }
+      ctx.globalCompositeOperation = 'source-over';
+      // 十字架跟著低音亮一下
+      const R = window.worshipAudioReact();
+      crossWrap.style.filter = R && !reduce ? `brightness(${(1 + R.bass * 0.35 + (now - lastBeat < 160 ? 0.15 : 0)).toFixed(3)})` : '';
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // 方便測試：在主控台輸入 worshipAudioTest() 以合成音樂模擬（不需分享音訊）
+  window.worshipAudioTest = (volume = 0.6) => {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const out = audioCtx.createGain(); out.gain.value = volume;
+    const kick = audioCtx.createOscillator(); kick.frequency.value = 60;
+    const kg = audioCtx.createGain(); kg.gain.value = 0; kick.connect(kg).connect(out);
+    const pad = audioCtx.createOscillator(); pad.type = 'sawtooth'; pad.frequency.value = 220;
+    const pg = audioCtx.createGain(); pg.gain.value = 0.25; pad.connect(pg).connect(out);
+    const hi = audioCtx.createOscillator(); hi.type = 'square'; hi.frequency.value = 3200;
+    const hg = audioCtx.createGain(); hg.gain.value = 0.05; hi.connect(hg).connect(out);
+    const t0 = audioCtx.currentTime;
+    for (let i = 0; i < 200; i++) { kg.gain.setValueAtTime(1, t0 + i * 0.5); kg.gain.exponentialRampToValueAtTime(0.01, t0 + i * 0.5 + 0.3); }
+    [kick, pad, hi].forEach(o => o.start());
+    out.stop = () => [kick, pad, hi].forEach(o => o.stop());
+    connect(null, out);
+  };
+
+  window.addEventListener('resize', resize);
+  resize();
+  render();
+  requestAnimationFrame(frame);
 })();
 </script>
 
@@ -2229,7 +2528,9 @@ void main() {
     const flight = (S.starSpeed / 10) * (S.reverse ? -1 : 1);
     state.time += dt * motion;
     state.gloss += dt * flight * motion;
-    state.depth += dt * flight * S.speed * motion * (1 + state.boost * 14);
+    const AR = window.worshipAudioReact && window.worshipAudioReact();
+    if (AR && AR.beatId !== state.beatSeen) { state.beatSeen = AR.beatId; state.boost = Math.min(0.6, state.boost + 0.12 * AR.beatStrength); }
+    state.depth += dt * flight * S.speed * motion * (1 + state.boost * 14) * (AR ? 1 + AR.level * 4 : 1);
     state.angle += dt * S.rotationSpeed * motion;
     state.boost *= Math.exp(-dt * 1.3);
     if (state.boost < 0.001) state.boost = 0;
@@ -2464,6 +2765,7 @@ void main() {
   const pulses = [];
   const pulseData = new Float32Array(MAX_PULSES * 4);
   let time = 0, opening = S.intro && !reduced ? 0 : 1, raf = 0, last = 0;
+  let audioGain = 1;   // 偵測音樂時，光束亮度完全由聲音決定（沒聲音＝沒有光）
   let pageVisible = document.visibilityState !== 'hidden';
 
   function resize() {
@@ -2537,10 +2839,23 @@ void main() {
     gl.uniform1f(u.uDistortion, S.distortion);
     gl.uniform1f(u.uDensity, S.density);
     gl.uniform1f(u.uSharpness, S.sharpness);
-    gl.uniform1f(u.uGlow, S.glow);
+    const AR = window.worshipAudioReact && window.worshipAudioReact();
+    // 跟著聲音：音量越大光越強，安靜時完全熄滅；低音再額外加亮，讓重拍更明顯
+    let target = 1;
+    if (AR) {
+      const loud = Math.max(0, AR.level - 0.02) / 0.4;             // 扣掉極小的底噪
+      target = Math.min(1.9, Math.pow(Math.min(1, loud), 0.8) * 1.25 + AR.bass * 0.65);
+    }
+    audioGain += (target - audioGain) * (target > audioGain ? 0.45 : 0.1);   // 亮得快、暗得稍慢
+    if (audioGain < 0.004) audioGain = 0;
+    if (AR && AR.beatId !== frame.beatSeen) {
+      frame.beatSeen = AR.beatId;
+      if (AR.beatStrength > 0.2 && !reduced) { pulses.push({ age: 0 }); if (pulses.length > MAX_PULSES) pulses.shift(); }
+    }
+    gl.uniform1f(u.uGlow, S.glow * (AR ? Math.min(1.6, audioGain) : 1));
     gl.uniform1f(u.uHaze, S.haze);
     gl.uniform1f(u.uAtmosphere, S.atmosphere);
-    gl.uniform1f(u.uIntensity, S.intensity);
+    gl.uniform1f(u.uIntensity, S.intensity * audioGain);
     gl.uniform4f(u.uShadow, shade.x * W, shade.y * H, shade.presence, 16);
     gl.uniform4fv(u.uPulses, pulseData);
     gl.uniform2f(u.uIntro, eased * 2.6, smoother(opening / 0.5));
