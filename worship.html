@@ -1880,65 +1880,36 @@ void main() {
   let meteors = [], embers = [], queue = [];
   let nextMeteor = performance.now() + 2500 + Math.random() * 3000;
 
-  // 流星軌跡：二次貝茲曲線，從一側畫面外出發、從另一側畫面外離開，中途畫出弧線
-  const bez = (m, t) => {
-    const u = 1 - t;
-    return {
-      x: u * u * m.p0.x + 2 * u * t * m.p1.x + t * t * m.p2.x,
-      y: u * u * m.p0.y + 2 * u * t * m.p1.y + t * t * m.p2.y
-    };
-  };
-  const bezTangent = (m, t) => {
-    const u = 1 - t;
-    return {
-      x: 2 * u * (m.p1.x - m.p0.x) + 2 * t * (m.p2.x - m.p1.x),
-      y: 2 * u * (m.p1.y - m.p0.y) + 2 * t * (m.p2.y - m.p1.y)
-    };
+  const envelope = age => Math.min(1, age / 0.12);   // 快速點亮，之後一路亮著直到飛出畫面
+  // ===== 立體流星：從遠方的小亮點出發，朝畫面飛來、逐漸變大，最後從畫面兩側飛出 =====
+  // 與銀河星空相同的透視：消失點在畫面中央，物體的螢幕位置 = 消失點 + 世界座標 × 焦距 ÷ 距離
+  const vp = () => ({ x: w / 2, y: h * 0.45 });
+  const focal = () => Math.max(w, h) * 0.75;
+  const project = (p) => {
+    const f = focal(), c = vp(), k = f / p.z;
+    return { x: c.x + p.x * k, y: c.y + p.y * k, k };
   };
 
   function spawnMeteor(base) {
-    const fromLeft = base ? base.fromLeft : Math.random() < 0.5;
-    const scale = 0.75 + Math.random() * 0.6;                       // 粗細與亮度
-    // 依螢幕寬度縮放：手機上光尾短一點，才不會一條光尾就橫跨整個畫面
-    const screenK = Math.min(1, Math.max(0.5, w / 1100));
-    const len = (180 + Math.random() * 160) * scale * screenK;
-    const margin = 40;
-    const sx = fromLeft ? -margin : w + margin;                     // 從左側或右側畫面外出發
-    const ex = fromLeft ? w + margin : -margin;                     // 從另一側畫面外離開
-    // 起點高度：畫面上方 4%～35%；終點比起點低 4%～25%（不超過畫面 60%，盡量不壓到經文）
-    const y0 = base ? Math.min(h * 0.5, Math.max(h * 0.03, base.y0 + (Math.random() - 0.5) * h * 0.12))
-                    : h * (0.04 + Math.random() * 0.31);
-    const drop = base ? base.drop * (0.85 + Math.random() * 0.3) : h * (0.04 + Math.random() * 0.21);
-    const y1 = Math.min(h * 0.6, y0 + drop);
-    // 弧度：多數往上拱起（像拋出去再落下），少數往下凹；控制點限制在畫面內，弧線不會從上下緣跑出去
-    const bulge = base ? base.bulge : (Math.random() < 0.7 ? -1 : 0.6) * h * (0.08 + Math.random() * 0.14);
-    const cx = w * (0.35 + Math.random() * 0.3);
-    const cy = Math.min(h * 0.68, Math.max(h * 0.02, (y0 + y1) / 2 + bulge));
-    const m = {
-      p0: { x: sx, y: y0 }, p1: { x: cx, y: cy }, p2: { x: ex, y: y1 },
-      t: 0,
-      speed: 0,                                                     // 下方依「橫越時間」換算
-      len,
-      width: 2.2 * scale,
-      glow: scale,
-      age: 0,
-      trail: [],
-      sparkAcc: 0
-    };
-    // 估算曲線長度，讓流星以固定速度前進
-    let L = 0, prev = bez(m, 0);
-    for (let i = 1; i <= 24; i++) { const q = bez(m, i / 24); L += Math.hypot(q.x - prev.x, q.y - prev.y); prev = q; }
-    m.length = L;
-    // 以「橫越畫面所需時間」決定速度，手機與電腦看起來一樣從容
-    // 電腦約 1.4～2.2 秒；窄螢幕（手機）約 2.2～3.2 秒，因為小螢幕上同樣的移動看起來更快
+    const f = focal(), c = vp();
+    const side = base ? base.side : (Math.random() < 0.5 ? -1 : 1);       // 往左或往右飛出
+    const z = base ? base.z * (0.9 + Math.random() * 0.25) : 70 + Math.random() * 30;   // 出發時很遠
+    // 起點：消失點附近（偏上方）的小亮點
+    const sx = base ? base.sx + (Math.random() - 0.5) * w * 0.08 : c.x + (Math.random() - 0.5) * w * 0.3;
+    const sy = base ? base.sy + (Math.random() - 0.5) * h * 0.04 : c.y - h * (0.02 + Math.random() * 0.12);
     const narrow = w < 700;
-    const duration = (narrow ? 2.2 : 1.4) + Math.random() * (narrow ? 1.0 : 0.8);
-    m.speed = L / duration;
-    Object.assign(m, bez(m, 0));
-    const tg = bezTangent(m, 0), tl = Math.hypot(tg.x, tg.y) || 1;
-    m.vx = tg.x / tl * m.speed; m.vy = tg.y / tl * m.speed;
+    const flight = (narrow ? 2.6 : 2.0) + Math.random() * 0.8;           // 從出現到飛出畫面大約的秒數
+    const m = {
+      x: (sx - c.x) * z / f, y: (sy - c.y) * z / f, z,
+      vz: -(z * 0.82) / flight,                                          // 朝鏡頭靠近
+      vx: side * (3.6 + Math.random() * 2.2) * z / 70 / flight * 4,      // 往一側偏，最後從側邊飛出
+      vy: (-0.2 + Math.random() * 0.5) * z / 70 / flight * 4,
+      ay: (0.6 + Math.random() * 1.2) * (base ? base.bend : 1),          // 微微下墜，軌跡帶弧度
+      glow: 0.8 + Math.random() * 0.5,
+      age: 0, trail: [], sparkAcc: 0, gone: false
+    };
     meteors.push(m);
-    return { fromLeft, y0, drop, bulge };
+    return { side, z, sx, sy, bend: m.ay };
   }
 
   // 偶爾（約 25%）來一小陣 2～4 顆的流星雨
@@ -1950,12 +1921,12 @@ void main() {
     }
   }
 
-  function emitEmber(x, y, vx, vy, big) {
+  function emitEmber(x, y, vx, vy, big, scale = 1) {
     embers.push({
       x, y,
-      vx: vx + (Math.random() - 0.5) * 40,
-      vy: vy + (Math.random() - 0.5) * 40,
-      size: (big ? 2.4 : 1.2) + Math.random() * (big ? 2.2 : 1.6),
+      vx: vx + (Math.random() - 0.5) * 40 * scale,
+      vy: vy + (Math.random() - 0.5) * 40 * scale,
+      size: ((big ? 2.4 : 1.2) + Math.random() * (big ? 2.2 : 1.6)) * scale,
       age: 0,
       life: 0.6 + Math.random() * 0.9,
       sprite: SPRITES[(Math.random() * SPRITES.length) | 0],
@@ -1963,41 +1934,33 @@ void main() {
     });
   }
 
-  const envelope = age => Math.min(1, age / 0.12);   // 快速點亮，之後一路亮著直到飛出畫面
+  // 遠處暗、靠近變亮
+  const nearness = z => Math.min(1, Math.max(0, (95 - z) / 55));
 
+  // 光尾：投影過去 0.4 秒的位置，近處粗、遠處細，頭粗尾細
   function drawTail(m, alpha) {
-    const pts = m.trail;
+    const pts = m.trail.map(p => ({ ...project(p), z: p.z }));
     if (pts.length < 2) return;
-    // 由頭往尾累積距離，取出光尾長度內的點
-    const path = [pts[pts.length - 1]];
-    let dist = 0;
-    for (let i = pts.length - 2; i >= 0 && dist < m.len; i--) {
-      const p = pts[i], q = path[path.length - 1];
-      dist += Math.hypot(q.x - p.x, q.y - p.y);
-      path.push(p);
-    }
-    if (path.length < 2) return;
-    const head = path[0], tip = path[path.length - 1];
-    // 三層：寬柔金光 → 暖白 → 白色核心，形成有厚度的光尾
+    const head = pts[pts.length - 1], tip = pts[0];
     const layers = [
-      [m.width * 7, [255, 196, 80], 0.16],
-      [m.width * 2.8, [255, 232, 170], 0.42],
-      [m.width * 0.9, [255, 255, 255], 0.95]
+      [7, [255, 196, 80], 0.16],
+      [2.8, [255, 232, 170], 0.42],
+      [0.9, [255, 255, 255], 0.95]
     ];
-    for (const [wid, [r, g, b], a] of layers) {
+    for (const [mult, [r, g, b], a] of layers) {
       const left = [], right = [];
-      for (let i = 0; i < path.length; i++) {
-        const p = path[i], q = path[Math.min(i + 1, path.length - 1)], o = path[Math.max(i - 1, 0)];
-        let nx = -(q.y - o.y), ny = q.x - o.x;
+      for (let i = pts.length - 1; i >= 0; i--) {
+        const p = pts[i], q = pts[Math.max(i - 1, 0)], o = pts[Math.min(i + 1, pts.length - 1)];
+        let nx = -(o.y - q.y), ny = o.x - q.x;
         const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
-        const taper = Math.pow(1 - i / (path.length - 1), 1.6);   // 越往尾端越細
-        const hw = wid * taper * 0.5;
+        const along = (pts.length - 1 - i) / (pts.length - 1);           // 0 = 頭、1 = 尾
+        const hw = Math.min(14, 0.11 * p.k) * m.glow * mult * Math.pow(1 - along, 1.5) * 0.5;
         left.push([p.x + nx * hw, p.y + ny * hw]);
         right.push([p.x - nx * hw, p.y - ny * hw]);
       }
       const grad = ctx.createLinearGradient(head.x, head.y, tip.x, tip.y);
       grad.addColorStop(0, `rgba(${r},${g},${b},${a * alpha})`);
-      grad.addColorStop(0.35, `rgba(${r},${g},${b},${a * alpha * 0.45})`);
+      grad.addColorStop(0.4, `rgba(${r},${g},${b},${a * alpha * 0.45})`);
       grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
       ctx.fillStyle = grad;
       ctx.beginPath();
@@ -2009,17 +1972,17 @@ void main() {
     }
   }
 
-  function drawHead(m, alpha, time) {
-    // 外圈淡淡的金色光暈，讓星星和金色光尾自然銜接
-    const r = 16 * m.glow;
+  // 流星頭：與銀河星空同款的星星，越近越大
+  function drawHead(m, p, alpha, time) {
+    const scale = Math.min(1.6, 0.012 * p.k) * m.glow;                  // 遠處只是一個小亮點
+    const r = 16 * scale;
     ctx.globalAlpha = alpha * 0.55;
-    ctx.drawImage(SPRITES[2], m.x - r * 1.4, m.y - r * 1.4, r * 2.8, r * 2.8);
-    // 星星本體（與銀河星空同款），閃爍幅度同銀河的 twinkle 0.3
+    ctx.drawImage(SPRITES[2], p.x - r * 1.4, p.y - r * 1.4, r * 2.8, r * 2.8);
     const tri = t => { const f = t - Math.floor(t); return 2 * (1 - (x => x * x * (3 - 2 * x))(Math.abs(2 * f - 1))) - 1; };
-    const twinkle = 1 + 0.3 * (tri(time * 1.6 + m.len * 0.01) * 0.5);
-    const size = 80 * m.glow * twinkle;
+    const twinkle = 1 + 0.3 * (tri(time * 1.6 + m.glow * 7) * 0.5);
+    const size = Math.max(6, 80 * scale * twinkle);
     ctx.globalAlpha = Math.min(1, alpha * twinkle);
-    ctx.drawImage(STAR, m.x - size / 2, m.y - size / 2, size, size);
+    ctx.drawImage(STAR, p.x - size / 2, p.y - size / 2, size, size);
     ctx.globalAlpha = 1;
   }
 
@@ -2037,30 +2000,36 @@ void main() {
 
     ctx.globalCompositeOperation = 'lighter';   // 光線疊加會自然變亮
 
-    // 流星
     meteors = meteors.filter(m => {
       m.age += dt;
-      // 沿著弧線前進；超過終點後沿切線方向繼續飛，直到整條光尾離開畫面
-      m.t += m.speed * dt / m.length;
-      if (m.t <= 1) {
-        Object.assign(m, bez(m, m.t));
-        const tg = bezTangent(m, m.t), tl = Math.hypot(tg.x, tg.y) || 1;
-        m.vx = tg.x / tl * m.speed; m.vy = tg.y / tl * m.speed;
-      } else {
-        m.x += m.vx * dt; m.y += m.vy * dt;
+      if (!m.gone) {
+        m.vy += m.ay * dt;
+        m.x += m.vx * dt; m.y += m.vy * dt; m.z += m.vz * dt;
+        if (m.z < 2) m.gone = true;
       }
-      // 流星頭與整條光尾都從兩側離開畫面後才移除
-      const out = m.len + 60;
-      if (m.x < -out || m.x > w + out || m.age > 10) return false;
-      const onScreen = m.x > -20 && m.x < w + 20 && m.y > -20 && m.y < h + 20;
-      m.trail.push({ x: m.x, y: m.y });
-      if (m.trail.length > 120) m.trail.shift();
-      // 沿途灑落餘燼
-      m.sparkAcc += dt * 70 * m.glow;
-      while (m.sparkAcc >= 1) { m.sparkAcc -= 1; if (onScreen) emitEmber(m.x, m.y, m.vx * 0.06, m.vy * 0.06 + 10, false); }
-      const alpha = envelope(m.age);
+      m.trail.push({ x: m.x, y: m.y, z: Math.max(m.z, 2), t: m.age });
+      while (m.trail.length > 2 && m.age - m.trail[0].t > 0.4) m.trail.shift();
+      const p = project({ x: m.x, y: m.y, z: Math.max(m.z, 2) });
+      const margin = 160;
+      const off = p.x < -margin || p.x > w + margin || p.y < -margin || p.y > h + margin;
+      // 流星頭飛出畫面（或飛到鏡頭前）後，等光尾也離開才移除
+      if (off || m.gone) {
+        const tailP = project(m.trail[0]);
+        if (m.gone || tailP.x < -margin || tailP.x > w + margin || tailP.y < -margin || tailP.y > h + margin) return false;
+      }
+      const alpha = envelope(m.age) * (0.35 + 0.65 * nearness(m.z));
+      // 沿途灑落餘燼（近處較多、較大）
+      const scale = Math.min(1.6, 0.012 * p.k);
+      m.sparkAcc += dt * 70 * m.glow * scale;
+      while (m.sparkAcc >= 1) {
+        m.sparkAcc -= 1;
+        if (!off) {
+          const prev = m.trail.length > 1 ? project(m.trail[m.trail.length - 2]) : p;
+          emitEmber(p.x, p.y, (p.x - prev.x) / dt * 0.06, (p.y - prev.y) / dt * 0.06 + 10, false, Math.max(0.4, scale));
+        }
+      }
       drawTail(m, alpha);
-      drawHead(m, alpha, time);
+      if (!off) drawHead(m, p, alpha, time);
       return true;
     });
 
