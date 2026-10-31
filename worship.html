@@ -674,7 +674,7 @@
 <script>
 // 使用者設定：特效開關與經文字體大小（存在瀏覽器裡，下次打開仍保留）
 // 預設：開啟天降光束、銀河星空、地平線微光；關閉光點粒子、流星
-window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false, horizon: true, eqBars: true, eqRing: true, eqReact: true };
+window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false, horizon: true, eqBars: true, eqReact: true };
 (() => {
   const KEY = 'worship-settings';
   const fx = window.worshipFx;
@@ -776,7 +776,7 @@ window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false
     return r;
   });
   // 音樂律動（偵測電腦音樂時才有作用；不支援的裝置不顯示）
-  const EQ_ITEMS = [['eqBars', '底部金色頻譜'], ['eqRing', '十字架光環'], ['eqReact', '特效隨音樂律動']];
+  const EQ_ITEMS = [['eqBars', '底部金色頻譜'], ['eqReact', '特效隨音樂律動']];
   const eqHead = el('div', 'mm-head', '<span>音樂律動</span><span>需先開啟 ♪</span>');
   const eqRows = EQ_ITEMS.map(([k, label]) => {
     const r = row({ text: label, role: 'menuitemcheckbox', checked: fx[k], onClick: b => { fx[k] = !fx[k]; setCheck(b, fx[k]); save(); } });
@@ -1408,43 +1408,6 @@ void main() {
     ctx.globalAlpha = 1;
   }
 
-  // ---- 等化器 2：環繞十字架的光環 ----
-  const RAYS = 96;
-  const rayLevels = new Float32Array(RAYS);
-  let ringSpin = 0;
-  function drawRing(dt) {
-    const r = crossWrap.getBoundingClientRect();
-    const cx = r.left + r.width / 2, cy = r.top + r.height * 0.27;   // 十字架交叉點
-    const inner = r.width * 0.62;
-    const maxLen = r.width * 0.55;
-    ringSpin += dt * 0.08;
-    const half = RAYS / 2;
-    for (let i = 0; i < RAYS; i++) {
-      // 左右對稱：上方是低音、往下是高音
-      const k = i < half ? i : RAYS - 1 - i;
-      const f0 = 50 * Math.pow(160, k / half), f1 = 50 * Math.pow(160, (k + 1) / half);
-      rayLevels[i] = follow(rayLevels[i], Math.pow(band(f0, f1), 1.3), 0.5, 0.1);
-    }
-    ctx.lineCap = 'round';
-    for (let i = 0; i < RAYS; i++) {
-      const ang = -Math.PI / 2 + (i / RAYS) * Math.PI * 2 + Math.sin(ringSpin) * 0.05;
-      const len = 3 + rayLevels[i] * maxLen;
-      const c = Math.cos(ang), s = Math.sin(ang);
-      const x0 = cx + c * inner, y0 = cy + s * inner;
-      const x1 = cx + c * (inner + len), y1 = cy + s * (inner + len);
-      const g = ctx.createLinearGradient(x0, y0, x1, y1);
-      g.addColorStop(0, `rgba(255,236,160,${0.25 + rayLevels[i] * 0.6})`);
-      g.addColorStop(1, 'rgba(255,190,60,0)');
-      ctx.strokeStyle = g;
-      ctx.lineWidth = Math.max(1.2, inner * 0.035);
-      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-    }
-    // 內圈淡淡的光環，跟著整體音量明暗
-    ctx.strokeStyle = `rgba(255,220,130,${0.08 + A.level * 0.35})`;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(cx, cy, inner - 4, 0, Math.PI * 2); ctx.stroke();
-  }
-
   let last = 0;
   function frame(now) {
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
@@ -1464,7 +1427,6 @@ void main() {
       }
       const f = fx();
       ctx.globalCompositeOperation = 'lighter';
-      if (f.eqRing !== false) drawRing(dt);
       if (f.eqBars !== false) drawBars();
       ctx.globalCompositeOperation = 'source-over';
       // 十字架跟著低音亮一下
