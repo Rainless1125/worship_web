@@ -423,6 +423,19 @@
     pointer-events: none;
     white-space: nowrap;
   }
+  .toast.long {                 /* 較長的操作說明：可換行、圓角較小 */
+    white-space: normal;
+    width: max-content;
+    max-width: min(92vw, 520px);
+    border-radius: 14px;
+    line-height: 1.6;
+    text-align: center;
+    padding: 12px 18px;
+    background: rgba(14, 11, 4, 0.96);   /* 長說明蓋在經文上也要讀得清楚 */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+    -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+  }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   /* ===== macOS 玻璃選單（設定） ===== */
   .mac-menu {
@@ -709,7 +722,9 @@
 <script>
 // 使用者設定：特效開關與經文字體大小（存在瀏覽器裡，下次打開仍保留）
 // 預設：開啟天降光束、銀河星空、地平線微光；關閉光點粒子、流星
-window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false, horizon: true, eqBars: true, eqReact: true, eqStyle: 'wave', eqSens: 1 };
+window.worshipDensity = () => Math.min(1, Math.max(0.1, (window.worshipFx && window.worshipFx.density) || 1));
+window.worshipRenderScale = () => 0.55 + 0.45 * window.worshipDensity();
+window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false, horizon: true, eqBars: true, eqReact: true, eqStyle: 'wave', eqSens: 1, density: 1 };
 (() => {
   const KEY = 'worship-settings';
   const fx = window.worshipFx;
@@ -853,7 +868,28 @@ window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false
   sensInput.addEventListener('keydown', e => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.stopPropagation(); });
   showSens();
   const eqSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
-  mainList.append(sizeHead, fontRow, upRow, downRow, el('div', 'mm-sep'), fxHead, ...fxRows,
+  // 粒子數量：筆電較卡時可調低（10%～100%），同時降低特效的繪圖解析度
+  const denHead = el('div', 'mm-head', '<span>粒子數量</span><span>電腦較卡時調低</span>');
+  const denRow = el('div', 'mm-slider');
+  denRow.innerHTML = '<input type="range" min="10" max="100" step="10" aria-label="粒子數量"><span class="val"></span>';
+  const denLabels = el('div', 'mm-slider-labels', '<span>少</span><span>多</span>');
+  const denInput = denRow.querySelector('input'), denVal = denRow.querySelector('.val');
+  const showDen = () => {
+    const pct = Math.round(fx.density * 100);
+    denInput.value = pct;
+    denVal.textContent = pct + '%';
+    denInput.style.setProperty('--fill', ((pct - 10) / 90 * 100).toFixed(1) + '%');
+    denInput.setAttribute('aria-valuetext', pct + '%');
+  };
+  denInput.addEventListener('input', () => {
+    fx.density = Math.round(parseFloat(denInput.value)) / 100;
+    showDen();
+    window.dispatchEvent(new Event('worship-density'));   // 通知各特效重新調整
+  });
+  denInput.addEventListener('change', save);
+  denInput.addEventListener('keydown', e => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.stopPropagation(); });
+  showDen();
+  mainList.append(sizeHead, fontRow, upRow, downRow, el('div', 'mm-sep'), fxHead, ...fxRows, denHead, denRow, denLabels,
     ...(eqSupported ? [el('div', 'mm-sep'), eqHead, ...eqRows, sensHead, sensRow, sensLabels, styleHead, ...styleRows] : []));
 
   // 字體子選單（每個名稱用該字體本身顯示）
@@ -1281,7 +1317,7 @@ void main() {
     gl.uniform1f(u.uSoft, S.soft ? 0.2 : 0);
     gl.uniform1f(u.uShimmer, 1);
     gl.uniform1f(u.uOpacity, S.opacity);
-    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, S.count);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, Math.max(1, Math.round(S.count * window.worshipDensity())));
     gl.bindVertexArray(null);
   }
 
@@ -1308,7 +1344,7 @@ void main() {
   function resize() {
     view.width = Math.max(1, window.innerWidth);
     view.height = Math.max(1, window.innerHeight);
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const ratio = Math.min(window.devicePixelRatio || 1, 2) * window.worshipRenderScale();   // 粒子數量調低時一併降低解析度
     canvas.width = Math.max(1, Math.round(view.width * ratio));
     canvas.height = Math.max(1, Math.round(view.height * ratio));
     view.ratio = canvas.width / view.width;
@@ -1330,6 +1366,7 @@ void main() {
 
   document.addEventListener('visibilitychange', () => { last = 0; wake(); });
   window.addEventListener('resize', resize);
+  window.addEventListener('worship-density', resize);   // 粒子數量改變時重設解析度
   resize();
 })();
 </script>
@@ -1372,7 +1409,19 @@ void main() {
     document.body.classList.toggle('audio-on', active);
   }
 
+  // 判斷瀏覽器與作業系統，給出對應的操作提示
+  const UA = navigator.userAgent;
+  const isMac = /Macintosh|Mac OS X/.test(UA) && !/iPhone|iPad/.test(UA);
+  const isSafari = /Safari\//.test(UA) && !/Chrome|Chromium|CriOS|Edg\/|EdgiOS|OPR\/|Firefox|FxiOS/.test(UA);
+  const isFirefox = /Firefox\//.test(UA);
+  const HINT_TAB = '選「分頁」→ 點選正在播音樂的分頁，並開啟左下角「同時分享分頁音訊」';
+  const HINT_SCREEN = '選「整個螢幕」並勾選「分享系統音訊」';
+
   async function start() {
+    // Safari、Firefox 不支援分享聲音：直接提示改用 Chrome／Edge
+    if (isSafari) { toast('Safari 不支援分享聲音，請改用 Chrome 或 Edge 開啟此網頁'); return; }
+    if (isFirefox) { toast('Firefox 不支援分享聲音，請改用 Chrome 或 Edge 開啟此網頁'); return; }
+    toast(isMac ? '請在接下來的視窗' + HINT_TAB : '請在接下來的視窗' + HINT_SCREEN + '，或' + HINT_TAB);
     try {
       // Chrome／Edge 規定一定要同時要求畫面，取得後立刻停掉畫面，只留聲音
       stream = await navigator.mediaDevices.getDisplayMedia({
@@ -1386,10 +1435,21 @@ void main() {
       else toast('此瀏覽器或環境不支援分享音訊');
       return;
     }
+    // 記下使用者選了什麼（整個螢幕／視窗／分頁），沒收到聲音時給對應的提示
+    const vt = stream.getVideoTracks()[0];
+    const surface = vt && vt.getSettings ? vt.getSettings().displaySurface : '';
     stream.getVideoTracks().forEach(t => t.stop());
     const tracks = stream.getAudioTracks();
     if (!tracks.length) {
-      toast('沒有收到聲音：請勾選「分享系統音訊」或「分享分頁音訊」');
+      let hint;
+      if (surface === 'window') hint = '「視窗」無法分享聲音。請重新按聲波鍵，' + (isMac ? HINT_TAB : HINT_SCREEN + '，或' + HINT_TAB);
+      else if (surface === 'browser') hint = '沒有收到聲音：分享分頁時，請開啟左下角「同時分享分頁音訊」';
+      else if (surface === 'monitor') hint = isMac
+        ? '沒有收到聲音：這台 Mac 無法分享整個螢幕的聲音，請改' + HINT_TAB
+        : '沒有收到聲音：分享整個螢幕時，請勾選左下角「分享系統音訊」';
+      else hint = '沒有收到聲音：' + (isMac ? '請' + HINT_TAB : '請' + HINT_SCREEN + '，或' + HINT_TAB);
+      toast(hint);
+      stream.getTracks().forEach(t => t.stop());
       stream = null;
       return;
     }
@@ -1507,8 +1567,8 @@ void main() {
     for (let j = 0; j < n; j++) {
       const v = levels[j];                                         // j = 0 是最低音（最靠中間）
       for (const k of [n - 1 - j, n + j]) {                        // 左側與右側對稱位置
-        emitAcc[k] += dt * Math.pow(v, 1.6) * 16;                  // 越強噴越多
-        while (emitAcc[k] >= 1 && motes.length < 900) {
+        emitAcc[k] += dt * Math.pow(v, 1.6) * 16 * window.worshipDensity();   // 越強噴越多（乘上粒子數量）
+        while (emitAcc[k] >= 1 && motes.length < 900 * window.worshipDensity()) {
           emitAcc[k] -= 1;
           motes.push({
             x: left + k * gap + gap / 2 + (Math.random() - 0.5) * gap,
@@ -1809,12 +1869,14 @@ void main() {
   let lock = null;
   let toastTimer;
 
-  window.worshipToast = msg => toast(msg);
-  function toast(msg) {
+  window.worshipToast = (msg, ms) => toast(msg, ms);
+  function toast(msg, ms) {
     toastEl.textContent = msg;
+    toastEl.classList.toggle('long', msg.length > 24);
     toastEl.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2500);
+    // 一般提示 2.5 秒；較長的說明依字數停留較久（最多 9 秒）
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms || Math.min(9000, Math.max(2500, msg.length * 110)));
   }
 
   async function acquire() {
@@ -2567,7 +2629,7 @@ void main() {
     gl.uniform1f(u.uRepulsionStrength, S.repulsionStrength);
     gl.uniform1f(u.uMouseActiveFactor, state.active);
     gl.uniform1f(u.uAutoCenterRepulsion, S.autoCenterRepulsion);
-    gl.uniform1i(u.uLayers, S.layers);
+    gl.uniform1i(u.uLayers, Math.max(1, Math.round(S.layers * window.worshipDensity())));
     gl.uniform3fv(u.uColors, colors);
     gl.uniform1i(u.uColorCount, 0);
     gl.uniform1f(u.uWarp, state.boost);
@@ -2618,7 +2680,7 @@ void main() {
   window.worshipGalaxyWake = () => { if (!reduce) { state.reveal = 0; } last = 0; wake(); };
 
   function resize() {
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const ratio = Math.min(window.devicePixelRatio || 1, 2) * window.worshipRenderScale();   // 粒子數量調低時一併降低解析度
     canvas.width = Math.max(1, Math.round(window.innerWidth * ratio));
     canvas.height = Math.max(1, Math.round(window.innerHeight * ratio));
     if (fxOn()) render();
@@ -2643,6 +2705,7 @@ void main() {
     .observe(document.body, { attributes: true, attributeFilter: ['class'] });
   document.addEventListener('visibilitychange', () => { last = 0; wake(); });
   window.addEventListener('resize', resize);
+  window.addEventListener('worship-density', resize);   // 粒子數量改變時重設解析度
   // 預先編譯會用到的其他變體，避免第一次互動時卡頓
   setTimeout(() => build(false, true), 500);
   resize();
@@ -2835,7 +2898,7 @@ void main() {
     const cw = Math.max(1, window.innerWidth), ch = Math.max(1, window.innerHeight);
     const detail = S.density * (0.35 + 0.65 * S.sharpness);
     const sampling = Math.max(clamp(0.35 + 0.3 * detail, 0.5, 2), S.noise > 0 ? 1 : 0);
-    const ratio = Math.min(window.devicePixelRatio || 1, S.maxRatio, sampling, Math.sqrt(PIXEL_BUDGET / (cw * ch)));
+    const ratio = Math.min(window.devicePixelRatio || 1, S.maxRatio, sampling, Math.sqrt(PIXEL_BUDGET / (cw * ch))) * window.worshipRenderScale();
     const w = Math.max(1, Math.round(cw * ratio)), h = Math.max(1, Math.round(ch * ratio));
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
     size.width = cw; size.height = ch; size.ratio = w / cw;
@@ -2964,6 +3027,7 @@ void main() {
 
   canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); cancelAnimationFrame(raf); raf = 0; });
   window.addEventListener('resize', () => { resize(); wake(); });
+  window.addEventListener('worship-density', () => { resize(); wake(); });   // 粒子數量改變時重設解析度
   document.addEventListener('visibilitychange', () => { pageVisible = document.visibilityState !== 'hidden'; wake(); });
   resize();
   wake();
