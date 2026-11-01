@@ -1,7 +1,7 @@
 ## Light of the World｜世界的光
 
 <p align="center">
-  <a href="https://rainless1125.github.io/worship_web/"><img src="docs/preview.gif" alt="Light of the World 網頁預覽：發光十字架、天降光束、銀河星空、流星、經文輪播與音樂律動" width="640"></a>
+  <a href="https://rainless1125.github.io/worship_web/"><img src="docs/preview.gif" alt="Light of the World 網頁預覽：發光十字架、天降光束、銀河星空、流星、經文輪播與音樂律動" width="480"></a>
 </p>
 
 自製 worship 背景頁面網頁
