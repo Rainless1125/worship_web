@@ -724,7 +724,7 @@
 // 預設：開啟天降光束、銀河星空、地平線微光；關閉光點粒子、流星
 window.worshipDensity = () => Math.min(1, Math.max(0.1, (window.worshipFx && window.worshipFx.density) || 1));
 window.worshipRenderScale = () => 0.55 + 0.45 * window.worshipDensity();
-window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false, horizon: true, eqBars: true, eqReact: true, eqStyle: 'wave', eqSens: 1, density: 1 };
+window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false, horizon: true, eqBars: true, eqReact: true, eqStyle: 'wave', eqSens: 1, density: 1, verseHold: 1 };
 (() => {
   const KEY = 'worship-settings';
   const fx = window.worshipFx;
@@ -868,6 +868,33 @@ window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false
   sensInput.addEventListener('keydown', e => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.stopPropagation(); });
   showSens();
   const eqSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+  // 經文停留時間：0.5～3 倍（正中間 1.0 為標準：每則約 8～20 秒，依經文長短）
+  const HOLD_MIN = 0.5, HOLD_MAX = 3;
+  const holdToVal = pos => Math.round((pos <= 50 ? HOLD_MIN + (1 - HOLD_MIN) * pos / 50 : 1 + (HOLD_MAX - 1) * (pos - 50) / 50) * 20) / 20;
+  const holdToPos = v => Math.round(v <= 1 ? (v - HOLD_MIN) / (1 - HOLD_MIN) * 50 : 50 + (v - 1) / (HOLD_MAX - 1) * 50);
+  const holdHead = el('div', 'mm-head', '<span>經文停留時間</span><span id="holdRange"></span>');
+  const holdRow = el('div', 'mm-slider');
+  holdRow.innerHTML = '<input type="range" min="0" max="100" step="1" aria-label="經文停留時間"><span class="val"></span>';
+  const holdLabels = el('div', 'mm-slider-labels', '<span>短</span><span>標準</span><span>長</span>');
+  const holdInput = holdRow.querySelector('input'), holdVal = holdRow.querySelector('.val');
+  const showHold = () => {
+    const v = fx.verseHold;
+    if (document.activeElement !== holdInput) holdInput.value = holdToPos(v);
+    holdVal.textContent = (Number.isInteger(v * 10) ? v.toFixed(1) : v.toFixed(2)) + '×';   // 1.0× / 0.75× / 2.5×
+    holdInput.style.setProperty('--fill', holdInput.value + '%');
+    const lo = Math.round(8 * v), hi = Math.round(20 * v);
+    holdHead.querySelector('#holdRange').textContent = '每則約 ' + lo + '～' + hi + ' 秒';
+    holdInput.setAttribute('aria-valuetext', '每則約 ' + lo + ' 到 ' + hi + ' 秒');
+  };
+  holdInput.addEventListener('input', () => {
+    fx.verseHold = holdToVal(parseFloat(holdInput.value));
+    showHold();
+    window.dispatchEvent(new Event('worship-verse-hold'));   // 目前這則也立刻套用
+  });
+  holdInput.addEventListener('change', save);
+  holdInput.addEventListener('keydown', e => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.stopPropagation(); });
+  showHold();
+
   // 粒子數量：筆電較卡時可調低（10%～100%），同時降低特效的繪圖解析度
   const denHead = el('div', 'mm-head', '<span>粒子數量</span><span>電腦較卡時調低</span>');
   const denRow = el('div', 'mm-slider');
@@ -889,7 +916,7 @@ window.worshipFx = { lightrays: true, galaxy: true, bokeh: false, meteors: false
   denInput.addEventListener('change', save);
   denInput.addEventListener('keydown', e => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.stopPropagation(); });
   showDen();
-  mainList.append(sizeHead, fontRow, upRow, downRow, el('div', 'mm-sep'), fxHead, ...fxRows, denHead, denRow, denLabels,
+  mainList.append(sizeHead, fontRow, upRow, downRow, holdHead, holdRow, holdLabels, el('div', 'mm-sep'), fxHead, ...fxRows, denHead, denRow, denLabels,
     ...(eqSupported ? [el('div', 'mm-sep'), eqHead, ...eqRows, sensHead, sensRow, sensLabels, styleHead, ...styleRows] : []));
 
   // 字體子選單（每個名稱用該字體本身顯示）
@@ -1797,10 +1824,11 @@ void main() {
     }
   }
 
-  // 依經文長短決定停留時間：約 8～20 秒
-  const holdTime = t => Math.min(20000, 8000 + t.length * 120);
+  // 依經文長短決定停留時間：標準約 8～20 秒，再乘上設定的「經文停留時間」倍率
+  const holdMult = () => Math.min(3, Math.max(0.5, (window.worshipFx && window.worshipFx.verseHold) || 1));
+  const holdTime = t => Math.min(20000, 8000 + t.length * 120) * holdMult();
 
-  let holdTimer = 0, swapTimer = 0;
+  let holdTimer = 0, swapTimer = 0, shownAt = 0;
   function display(idx) {
     current = idx;
     const v = VERSES[idx];
@@ -1808,9 +1836,17 @@ void main() {
     refEl.textContent = v.ref;
     box.classList.remove('quick');
     box.classList.add('show');
+    shownAt = performance.now();
     clearTimeout(holdTimer);
     holdTimer = setTimeout(() => advance(false), FADE + holdTime(v.text));
   }
+  // 調整停留時間時，目前顯示中的這則也依新設定重新計算剩餘時間（至少再停留 2 秒）
+  window.addEventListener('worship-verse-hold', () => {
+    if (!box.classList.contains('show') || current < 0) return;
+    const remain = FADE + holdTime(VERSES[current].text) - (performance.now() - shownAt);
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(() => advance(false), Math.max(2000, remain));
+  });
   // 換到下一則；quick = 使用者手動按的，用較快的淡出
   function advance(quick) {
     clearTimeout(holdTimer); clearTimeout(swapTimer);
