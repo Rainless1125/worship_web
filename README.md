@@ -4,6 +4,12 @@
 
 
 
+### 線上網址
+
+👉 **https://rainless1125.github.io/worship_web/**
+
+手機或電腦用瀏覽器直接打開即可；手機可「加入主畫面」當作 App 使用。
+
 ### 使用方式
 
 直接用瀏覽器打開 `worship.html` 即可，不需要安裝任何東西（打開 `index.html` 也會自動跳轉過去）。
