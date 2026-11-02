@@ -1,7 +1,9 @@
 ## Light of the World｜世界的光
 
 <p align="center">
-  <a href="https://rainless1125.github.io/worship_web/"><img src="docs/preview.gif" alt="Light of the World 網頁預覽：發光十字架、天降光束、銀河星空、流星、經文輪播與音樂律動" width="480"></a>
+  <a href="https://rainless1125.github.io/worship_web/"><img src="docs/intro.gif" alt="Light of the World 介紹影片：十字架誕生、100 則經文、沉浸式光影特效、隨音樂律動、一鍵掌控、8 種字體、電腦與手機皆可用" width="480"></a>
+  <br>
+  <a href="docs/intro.mp4">▶ 觀看有配樂的完整版（MP4，30 秒）</a>
 </p>
 
 自製 worship 背景頁面網頁
@@ -32,7 +34,7 @@
 - `worship.html`：敬拜頁面本體
 - `index.html`：自動跳轉到 `worship.html`
 - `icons/`：網站圖示（`logo.svg` 為原始向量檔）
-- `docs/preview.gif`：README 開頭的預覽動畫
+- `docs/intro.gif`、`docs/intro.mp4`：介紹影片（GIF 無聲；MP4 含配樂）
 
 ### 備註
 
